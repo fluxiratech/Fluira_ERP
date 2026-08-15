@@ -180,6 +180,14 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
+  // Quick Multi-Select Subject Linker Modal State
+  const [quickLinkFaculty, setQuickLinkFaculty] = useState<Faculty | null>(null);
+  const [quickAllocatedSubjects, setQuickAllocatedSubjects] = useState<AllocationItem[]>([]);
+  const [quickSearch, setQuickSearch] = useState('');
+  const [quickDivision, setQuickDivision] = useState('All Divisions');
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState<string | null>(null);
+
   const canEdit = userRole === 'Admin' || userRole === 'HOD' || userRole === 'Class Teacher';
 
   // List of other faculty allocations to detect collisions and parallel division mappings
@@ -658,6 +666,119 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     setSelectedSubjectToAdd('');
   };
 
+  const handleSelectAllSubjects = () => {
+    setServerError(null);
+    const newItems: AllocationItem[] = filteredAvailableSubjects.map((sub) => {
+      const existing = allocatedSubjects.find((a) => a.subjectId === sub.id);
+      return existing || { subjectId: sub.id, division: selectedDivisionToAdd || 'All Divisions' };
+    });
+    setAllocatedSubjects(newItems);
+  };
+
+  const handleClearAllSubjects = () => {
+    setServerError(null);
+    setAllocatedSubjects([]);
+  };
+
+  // Quick Link Subject Handlers for Faculty Cards
+  const openQuickLink = (fac: Faculty) => {
+    setQuickLinkFaculty(fac);
+    setQuickError(null);
+    setQuickSearch('');
+    setQuickDivision('All Divisions');
+
+    const parsedAllocs: AllocationItem[] = (fac.allocatedSubjects || []).map((raw) => {
+      const p = parseAllocItem(raw);
+      return { subjectId: p.subjectId, division: p.division || 'All Divisions' };
+    });
+    setQuickAllocatedSubjects(parsedAllocs);
+  };
+
+  const toggleQuickSubject = (subId: string, defaultDiv: string = 'All Divisions') => {
+    setQuickError(null);
+    setQuickAllocatedSubjects((prev) => {
+      const exists = prev.some((item) => item.subjectId === subId);
+      if (exists) {
+        return prev.filter((item) => item.subjectId !== subId);
+      } else {
+        return [...prev, { subjectId: subId, division: defaultDiv }];
+      }
+    });
+  };
+
+  const updateQuickSubjectDivision = (subId: string, newDivision: string) => {
+    setQuickError(null);
+    setQuickAllocatedSubjects((prev) =>
+      prev.map((item) =>
+        item.subjectId === subId ? { ...item, division: newDivision } : item
+      )
+    );
+  };
+
+  const handleQuickSave = async () => {
+    if (!quickLinkFaculty) return;
+    setQuickSaving(true);
+    setQuickError(null);
+
+    const rawSubjectIds = quickAllocatedSubjects.map((item) => item.subjectId);
+    const formattedAllocatedSubjects = quickAllocatedSubjects.map(
+      (item) => `${item.subjectId}::${item.division || 'All Divisions'}`
+    );
+
+    const currentAllocationsData: FacultySubjectAllocation[] = quickAllocatedSubjects
+      .map((item) => {
+        const s = subjects.find((sub) => sub.id === item.subjectId || sub.code === item.subjectId);
+        if (!s) return null;
+        return {
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          semester: s.semester,
+          credits: s.credits,
+          type: s.type,
+          division: item.division || 'All Divisions',
+          divisions: [item.division || 'All Divisions'],
+          courseCode: s.courseCode,
+          departmentId: s.departmentId,
+        };
+      })
+      .filter(Boolean) as FacultySubjectAllocation[];
+
+    const updatedFac: Faculty = {
+      ...quickLinkFaculty,
+      allocatedSubjects: formattedAllocatedSubjects,
+      currentAllocations: currentAllocationsData,
+    };
+
+    try {
+      const response = await fetch(`/api/faculty/${quickLinkFaculty.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...updatedFac,
+          subjectIds: rawSubjectIds,
+        }),
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to update faculty subject allocations.');
+      }
+
+      const serverUpdated = await response.json();
+      const finalFac = serverUpdated.id ? serverUpdated : updatedFac;
+      setFacList((prev) =>
+        prev.map((f) => (f.id === quickLinkFaculty.id ? finalFac : f))
+      );
+      if (onUpdateFaculty) onUpdateFaculty(quickLinkFaculty.id, finalFac);
+      setQuickLinkFaculty(null);
+    } catch (err: any) {
+      setQuickError(err.message || 'Error updating linked subjects.');
+    } finally {
+      setQuickSaving(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setServerError(null);
@@ -1021,6 +1142,14 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
                   {canEdit && (
                     <div className="flex space-x-1 shrink-0">
+                      <button
+                        onClick={() => openQuickLink(fac)}
+                        className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition flex items-center space-x-1 text-xs font-bold"
+                        title="Multi-Select & Link Subjects"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline text-[10px]">Link</span>
+                      </button>
                       <button
                         onClick={() => handleOpenEdit(fac)}
                         className="p-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-600 rounded-lg transition"
@@ -1505,9 +1634,27 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
                 {/* Available Subjects Selection Catalog */}
                 <div>
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                    Available Subjects Catalog ({filteredAvailableSubjects.length}):
-                  </span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Available Subjects Catalog ({filteredAvailableSubjects.length}):
+                    </span>
+                    <div className="flex items-center space-x-1.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllSubjects}
+                        className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold transition"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearAllSubjects}
+                        className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
                   <div className="max-h-40 overflow-y-auto p-1.5 bg-white border border-slate-200 rounded-xl space-y-1.5">
                     {filteredAvailableSubjects.length > 0 ? (
                       filteredAvailableSubjects.map((sub) => {
@@ -1648,6 +1795,244 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Multi-Select Subject Linker Modal */}
+      {quickLinkFaculty && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl p-6 space-y-4 max-h-[90vh] flex flex-col relative animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-3">
+                <img
+                  src={quickLinkFaculty.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
+                  className="w-12 h-12 rounded-2xl object-cover ring-2 ring-indigo-100 shadow-xs"
+                  alt=""
+                />
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-base font-bold text-slate-900">
+                      Link Subjects: {quickLinkFaculty.fullName}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold">
+                      {quickAllocatedSubjects.length} Selected
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {quickLinkFaculty.designation} • {quickLinkFaculty.departmentName}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setQuickLinkFaculty(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {quickError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{quickError}</span>
+              </div>
+            )}
+
+            {/* Filter and Bulk Actions Bar */}
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
+                <div className="relative w-full sm:flex-1">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search by subject name, course code, or semester..."
+                    value={quickSearch}
+                    onChange={(e) => setQuickSearch(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 pl-8.5 pr-3 py-1.5 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                  <span className="text-[11px] text-slate-500 font-medium">Default Div:</span>
+                  <select
+                    value={quickDivision}
+                    onChange={(e) => setQuickDivision(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800 rounded-xl px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value="All Divisions">All Divisions</option>
+                    <option value="Div A">Div A</option>
+                    <option value="Div B">Div B</option>
+                    <option value="Div C">Div C</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-bold text-slate-600">
+                  Select subjects to link ({quickAllocatedSubjects.length} of {subjects.length} assigned):
+                </span>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const filtered = subjects.filter((s) => {
+                        const q = quickSearch.toLowerCase().trim();
+                        if (!q) return true;
+                        return (
+                          s.name.toLowerCase().includes(q) ||
+                          s.code.toLowerCase().includes(q) ||
+                          String(s.semester).includes(q)
+                        );
+                      });
+                      const newItems: AllocationItem[] = filtered.map((s) => {
+                        const existing = quickAllocatedSubjects.find((a) => a.subjectId === s.id || a.subjectId === s.code);
+                        return existing || { subjectId: s.id, division: quickDivision };
+                      });
+                      setQuickAllocatedSubjects(newItems);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickAllocatedSubjects([])}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Multi-Select Checkbox Group List */}
+            <div className="flex-1 overflow-y-auto max-h-80 p-2 bg-slate-50/50 border border-slate-200 rounded-2xl space-y-2">
+              {subjects
+                .filter((sub) => {
+                  const q = quickSearch.toLowerCase().trim();
+                  if (!q) return true;
+                  return (
+                    sub.name.toLowerCase().includes(q) ||
+                    sub.code.toLowerCase().includes(q) ||
+                    String(sub.semester).includes(q)
+                  );
+                })
+                .map((sub) => {
+                  const allocatedItem = quickAllocatedSubjects.find(
+                    (a) => a.subjectId === sub.id || a.subjectId === sub.code
+                  );
+                  const isChecked = !!allocatedItem;
+                  const currentDiv = allocatedItem?.division || quickDivision;
+                  const otherTeachers = getOtherAllocationsForSubject(sub.id, sub.code);
+                  const conflict = isChecked ? checkAllocationConflict(sub.id, currentDiv, sub.code) : null;
+
+                  return (
+                    <div
+                      key={sub.id}
+                      className={`p-2.5 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                        isChecked
+                          ? conflict
+                            ? 'bg-amber-50/70 border-amber-300'
+                            : 'bg-indigo-50/60 border-indigo-200'
+                          : 'bg-white border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <label className="flex items-center space-x-3 cursor-pointer flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleQuickSubject(sub.id, quickDivision)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-xs text-slate-900 truncate">
+                              {sub.name}
+                            </span>
+                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 font-bold shrink-0">
+                              {sub.code}
+                            </span>
+                            {conflict && (
+                              <span
+                                className="px-1.5 py-0.2 bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-bold rounded flex items-center space-x-0.5 shrink-0"
+                                title={`Collision with ${conflict.facultyName} on ${conflict.collidingDivision}`}
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-600 inline" />
+                                <span>Collision: {conflict.collidingDivision}</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-1.5 text-[10px] text-slate-500 font-medium">
+                            <span>Sem {sub.semester}</span>
+                            <span>•</span>
+                            <span>{sub.credits} Credits</span>
+                            <span>•</span>
+                            <span>{sub.type}</span>
+                            {otherTeachers.length > 0 && (
+                              <>
+                                <span>•</span>
+                                <span className="text-slate-600 font-semibold">
+                                  Taught by: {otherTeachers.map((t) => `${t.facultyName.split(' ')[0]} (${t.division})`).join(', ')}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </label>
+
+                      {isChecked && (
+                        <div className="flex items-center space-x-2 shrink-0 self-end sm:self-auto pl-7 sm:pl-0">
+                          <span className="text-[10px] text-slate-500 font-medium">Division:</span>
+                          <select
+                            value={currentDiv}
+                            onChange={(e) => updateQuickSubjectDivision(sub.id, e.target.value)}
+                            className="bg-white border border-slate-300 text-[11px] font-bold text-slate-800 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                          >
+                            <option value="All Divisions">All Divisions</option>
+                            <option value="Div A">Div A</option>
+                            <option value="Div B">Div B</option>
+                            <option value="Div C">Div C</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-xs text-slate-500">
+                Updating database via atomic transactional PUT route.
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setQuickLinkFaculty(null)}
+                  disabled={quickSaving}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleQuickSave}
+                  disabled={quickSaving}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {quickSaving ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Linked Subjects ({quickAllocatedSubjects.length})</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

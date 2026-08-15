@@ -846,38 +846,43 @@ export async function updateFaculty(
         allocatedSubjects: allocatedList !== undefined ? allocatedList : current.allocatedSubjects,
       };
 
-      // 1. Atomically update the faculty_list record
-      await tx.update(schema.facultyList).set(mapFacultyToSql(merged)).where(eq(schema.facultyList.id, id));
+      // 1. Transaction Step A: Clear existing subject associations for this specified faculty
+      await tx
+        .update(schema.subjects)
+        .set({
+          assignedFacultyId: null,
+          assignedFacultyName: null,
+        })
+        .where(
+          or(
+            eq(schema.subjects.assignedFacultyId, id),
+            eq(schema.subjects.assignedFacultyId, current.facultyId)
+          )
+        );
 
-      // 2. Atomically synchronize assignedFacultyId and assignedFacultyName in the subjects table
+      // 2. Transaction Step B: Associate new subject records based on the array of subject IDs
       if (allocatedList !== undefined) {
         const rawAllocated = allocatedList || [];
         const newAllocatedIds = rawAllocated.map((item) => parseAllocationItem(item).subjectId);
-        const allSubjects = await tx.select().from(schema.subjects);
 
-        for (const sub of allSubjects) {
-          const isNowAllocated = newAllocatedIds.includes(sub.id) || newAllocatedIds.includes(sub.code);
-          if (isNowAllocated) {
-            if (sub.assignedFacultyId !== id || sub.assignedFacultyName !== merged.fullName) {
-              await tx
-                .update(schema.subjects)
-                .set({
-                  assignedFacultyId: id,
-                  assignedFacultyName: merged.fullName,
-                })
-                .where(eq(schema.subjects.id, sub.id));
-            }
-          } else if (sub.assignedFacultyId === id || sub.assignedFacultyId === current.facultyId) {
-            await tx
-              .update(schema.subjects)
-              .set({
-                assignedFacultyId: null,
-                assignedFacultyName: null,
-              })
-              .where(eq(schema.subjects.id, sub.id));
-          }
+        for (const subIdentifier of newAllocatedIds) {
+          await tx
+            .update(schema.subjects)
+            .set({
+              assignedFacultyId: id,
+              assignedFacultyName: merged.fullName,
+            })
+            .where(
+              or(
+                eq(schema.subjects.id, subIdentifier),
+                eq(schema.subjects.code, subIdentifier)
+              )
+            );
         }
       }
+
+      // 3. Transaction Step C: Atomically update the faculty_list record with the latest profile & allocations
+      await tx.update(schema.facultyList).set(mapFacultyToSql(merged)).where(eq(schema.facultyList.id, id));
 
       return merged;
     });
