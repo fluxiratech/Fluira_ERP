@@ -12,6 +12,7 @@ interface FacultyDirectoryProps {
   departments: Department[];
   courses?: Course[];
   programs?: Program[];
+  subjects?: import('../types').Subject[];
   classTeacherAssignments?: ClassTeacherAssignment[];
   userRole?: Role;
   userName?: string;
@@ -28,6 +29,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   departments,
   courses = [],
   programs = [],
+  subjects = [],
   classTeacherAssignments = [],
   userRole = 'HOD',
   userName = 'Faculty User',
@@ -63,6 +65,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   const [mobile, setMobile] = useState('9876543210');
   const [weeklyWorkloadHours, setWeeklyWorkloadHours] = useState(16);
   const [photo, setPhoto] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
+  const [allocatedSubjects, setAllocatedSubjects] = useState<string[]>([]);
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -110,6 +113,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     setMobile('9876543210');
     setWeeklyWorkloadHours(16);
     setPhoto('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
+    setAllocatedSubjects([]);
     setShowModal(true);
   };
 
@@ -124,6 +128,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     setMobile(fac.mobile);
     setWeeklyWorkloadHours(fac.weeklyWorkloadHours);
     setPhoto(fac.photo);
+    setAllocatedSubjects(fac.allocatedSubjects || []);
     setShowModal(true);
   };
 
@@ -132,6 +137,12 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
       setFacList((prev) => prev.filter((f) => f.id !== id));
       if (onDeleteFaculty) onDeleteFaculty(id);
     }
+  };
+
+  const toggleSubjectAllocation = (subId: string) => {
+    setAllocatedSubjects((prev) =>
+      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, subId]
+    );
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -152,6 +163,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         mobile,
         weeklyWorkloadHours: Number(weeklyWorkloadHours),
         photo,
+        allocatedSubjects: allocatedSubjects.length > 0 ? allocatedSubjects : editingFaculty.allocatedSubjects,
       };
       setFacList((prev) =>
         prev.map((f) => (f.id === editingFaculty.id ? updatedFac : f))
@@ -171,7 +183,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         mobile,
         weeklyWorkloadHours: Number(weeklyWorkloadHours),
         photo: photo || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-        allocatedSubjects: ['sub-af301'],
+        allocatedSubjects: allocatedSubjects.length > 0 ? allocatedSubjects : ['sub-af301'],
         isActive: true,
       };
       setFacList((prev) => [...prev, newFac]);
@@ -339,6 +351,33 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span className="truncate">{fac.email}</span>
                 </p>
+
+                {/* Allocated Subjects Badge Section */}
+                <div className="pt-2 border-t border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-700 block mb-1.5 flex items-center space-x-1">
+                    <BookOpen className="w-3 h-3 text-indigo-600" />
+                    <span>Allocated Subjects ({fac.allocatedSubjects?.length || 0}):</span>
+                  </span>
+                  {fac.allocatedSubjects && fac.allocatedSubjects.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {fac.allocatedSubjects.map((subId) => {
+                        const matchedSub = subjects.find((s) => s.id === subId || s.code === subId);
+                        const label = matchedSub ? `${matchedSub.name} (${matchedSub.code})` : subId;
+                        return (
+                          <span
+                            key={subId}
+                            className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-[10px] font-medium text-indigo-700 max-w-[200px] truncate"
+                            title={label}
+                          >
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 italic">No subjects currently allocated.</span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -459,6 +498,48 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     onChange={(e) => setWeeklyWorkloadHours(Number(e.target.value))}
                     className="w-full bg-slate-50 border p-2 rounded-lg"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 block mb-1 font-bold">
+                  Allocated Subjects ({allocatedSubjects.length} selected)
+                </label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Select the subjects taught by this faculty member for timetable mapping and attendance tracking.
+                </p>
+                <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  {subjects.length > 0 ? (
+                    subjects.map((sub) => {
+                      const isSelected = allocatedSubjects.includes(sub.id);
+                      return (
+                        <div
+                          key={sub.id}
+                          onClick={() => toggleSubjectAllocation(sub.id)}
+                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition text-xs border ${
+                            isSelected
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-semibold'
+                              : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
+                            />
+                            <span>{sub.name}</span>
+                          </div>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/80 border text-slate-500">
+                            {sub.code}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-[11px] text-slate-400 p-2 text-center">No subjects available.</p>
+                  )}
                 </div>
               </div>
 

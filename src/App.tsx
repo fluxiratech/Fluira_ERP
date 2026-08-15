@@ -1258,6 +1258,7 @@ export default function App() {
               departments={departments}
               programs={programs}
               courses={courses}
+              subjects={subjects}
               classTeacherAssignments={classTeacherAssignments}
               userRole={currentUser.role}
               userName={currentUser.name}
