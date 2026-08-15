@@ -733,7 +733,41 @@ export async function deleteStudent(id: string): Promise<boolean> {
 export async function getAllFaculty(): Promise<Faculty[]> {
   try {
     const rows = await db.select().from(schema.facultyList);
-    return rows.map(mapSqlToFaculty);
+    const facultyList = rows.map(mapSqlToFaculty);
+
+    // Fetch all subjects to join linked allocations
+    const subjectRows = await db.select().from(schema.subjects);
+
+    // Join subject details for each faculty member
+    return facultyList.map((fac) => {
+      const allocatedIds = fac.allocatedSubjects || [];
+      
+      // Match subjects linked directly via allocatedSubjects ID/Code array OR assignedFacultyId in subjects table
+      const joinedSubjects = subjectRows.filter((sub) => {
+        return (
+          allocatedIds.includes(sub.id) ||
+          allocatedIds.includes(sub.code) ||
+          sub.assignedFacultyId === fac.id ||
+          sub.assignedFacultyId === fac.facultyId
+        );
+      });
+
+      const currentAllocations = joinedSubjects.map((s) => ({
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        semester: Number(s.semester),
+        credits: Number(s.credits),
+        type: s.type,
+        courseCode: s.courseCode || undefined,
+        departmentId: s.departmentId || undefined,
+      }));
+
+      return {
+        ...fac,
+        currentAllocations,
+      };
+    });
   } catch (err) {
     console.error('SQL getAllFaculty error:', err);
     return INITIAL_FACULTY;
@@ -750,8 +784,34 @@ export async function updateFaculty(id: string, updates: Partial<Faculty>): Prom
   if (existing.length === 0) return null;
   const current = mapSqlToFaculty(existing[0]);
   const merged = { ...current, ...updates };
+
+  // Update faculty record in PostgreSQL
   await db.update(schema.facultyList).set(mapFacultyToSql(merged)).where(eq(schema.facultyList.id, id));
-  return merged;
+
+  // Sync assignedFacultyId in subjects table if allocatedSubjects were updated
+  if (updates.allocatedSubjects !== undefined) {
+    const newAllocatedIds = updates.allocatedSubjects || [];
+    const allSubjects = await db.select().from(schema.subjects);
+    
+    for (const sub of allSubjects) {
+      const isNowAllocated = newAllocatedIds.includes(sub.id) || newAllocatedIds.includes(sub.code);
+      if (isNowAllocated && sub.assignedFacultyId !== id) {
+        await db.update(schema.subjects).set({
+          assignedFacultyId: id,
+          assignedFacultyName: merged.fullName,
+        }).where(eq(schema.subjects.id, sub.id));
+      } else if (!isNowAllocated && (sub.assignedFacultyId === id || sub.assignedFacultyId === current.facultyId)) {
+        await db.update(schema.subjects).set({
+          assignedFacultyId: null,
+          assignedFacultyName: null,
+        }).where(eq(schema.subjects.id, sub.id));
+      }
+    }
+  }
+
+  // Retrieve fresh faculty data with joined current allocations
+  const allUpdated = await getAllFaculty();
+  return allUpdated.find((f) => f.id === id) || merged;
 }
 
 export async function deleteFaculty(id: string): Promise<boolean> {

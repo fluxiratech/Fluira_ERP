@@ -474,6 +474,48 @@ async function startServer() {
   app.put('/api/faculty/:id', async (req, res) => {
     try {
       const { id } = req.params;
+      const { allocatedSubjects } = req.body;
+
+      // Server-side check: prevent assigning a subject if it is already exclusively assigned to another faculty
+      if (Array.isArray(allocatedSubjects) && allocatedSubjects.length > 0) {
+        const [allFaculty, allSubjects] = await Promise.all([
+          getAllFaculty(),
+          getAllSubjects(),
+        ]);
+
+        const otherFaculty = allFaculty.filter((f) => f.id !== id && f.facultyId !== id);
+
+        for (const subIdentifier of allocatedSubjects) {
+          // Find matching subject details
+          const matchedSubject = allSubjects.find((s) => s.id === subIdentifier || s.code === subIdentifier);
+          const subjectName = matchedSubject ? `${matchedSubject.name} (${matchedSubject.code})` : subIdentifier;
+
+          // Check if another faculty already has this subject in their allocatedSubjects
+          const conflictingFaculty = otherFaculty.find((f) => {
+            const facAllocations = f.allocatedSubjects || [];
+            return facAllocations.includes(subIdentifier) || (matchedSubject && facAllocations.includes(matchedSubject.code)) || (matchedSubject && facAllocations.includes(matchedSubject.id));
+          });
+
+          // Also check if assignedFacultyId in subjects table is set to another faculty
+          const hasExclusiveSubjectAssignment = matchedSubject && matchedSubject.assignedFacultyId && matchedSubject.assignedFacultyId !== id;
+          const assignedFacFromTable = hasExclusiveSubjectAssignment ? allFaculty.find(f => f.id === matchedSubject.assignedFacultyId || f.facultyId === matchedSubject.assignedFacultyId) : null;
+
+          const activeConflictFaculty = conflictingFaculty || assignedFacFromTable;
+
+          if (activeConflictFaculty && activeConflictFaculty.id !== id && activeConflictFaculty.facultyId !== id) {
+            return res.status(409).json({
+              error: `Subject '${subjectName}' is already exclusively assigned to ${activeConflictFaculty.fullName} (${activeConflictFaculty.designation}). Please reassign or de-allocate it from their profile first.`,
+              conflictSubject: subIdentifier,
+              conflictFaculty: {
+                id: activeConflictFaculty.id,
+                name: activeConflictFaculty.fullName,
+                designation: activeConflictFaculty.designation,
+              },
+            });
+          }
+        }
+      }
+
       const updated = await updateFaculty(id, req.body);
       if (!updated) return res.status(404).json({ error: 'Faculty not found' });
       await addAuditLog('Admin', 'Admin', 'UPDATE_FACULTY', 'USER_MGMT', `Updated faculty ${updated.fullName}`);

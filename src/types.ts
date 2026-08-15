@@ -307,6 +307,18 @@ export interface ChatConversation {
   unreadCount: number;
 }
 
+export interface FacultySubjectAllocation {
+  id: string;
+  code: string;
+  name: string;
+  semester: number;
+  credits: number;
+  type: string;
+  courseCode?: string;
+  courseName?: string;
+  departmentId?: string;
+}
+
 export interface Faculty {
   id: string;
   facultyId: string;
@@ -320,6 +332,7 @@ export interface Faculty {
   experienceYears: number;
   photo: string;
   allocatedSubjects: string[];
+  currentAllocations?: FacultySubjectAllocation[];
   isClassTeacherOf?: {
     departmentId: string;
     courseId?: string;
@@ -650,5 +663,3 @@ export interface AcademicCalendarEvent {
   createdBy?: string;
   createdAt?: string;
 }
-
-
