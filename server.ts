@@ -564,10 +564,15 @@ async function startServer() {
   app.put('/api/faculty/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      const { allocatedSubjects } = req.body;
+      const rawAllocatedSubjects =
+        req.body.allocatedSubjects !== undefined
+          ? req.body.allocatedSubjects
+          : req.body.subjectIds !== undefined
+          ? req.body.subjectIds
+          : req.body.assignedSubjects;
 
       // Division-aware collision check: Allow different faculty to teach the same subject on different divisions
-      if (Array.isArray(allocatedSubjects) && allocatedSubjects.length > 0) {
+      if (Array.isArray(rawAllocatedSubjects) && rawAllocatedSubjects.length > 0) {
         const [allFaculty, allSubjects] = await Promise.all([
           getAllFaculty(),
           getAllSubjects(),
@@ -575,7 +580,7 @@ async function startServer() {
 
         const otherFaculty = allFaculty.filter((f) => f.id !== id && f.facultyId !== id);
 
-        for (const rawAlloc of allocatedSubjects) {
+        for (const rawAlloc of rawAllocatedSubjects) {
           const parsed = parseAllocationItem(rawAlloc);
           const matchedSubject = allSubjects.find((s) => s.id === parsed.subjectId || s.code === parsed.subjectId);
           const subjectName = matchedSubject ? `${matchedSubject.name} (${matchedSubject.code})` : parsed.subjectId;
@@ -607,11 +612,17 @@ async function startServer() {
         }
       }
 
-      const updated = await updateFaculty(id, req.body);
+      const updated = await updateFaculty(id, {
+        ...req.body,
+        allocatedSubjects: rawAllocatedSubjects,
+        subjectIds: Array.isArray(req.body.subjectIds) ? req.body.subjectIds : undefined,
+      });
+
       if (!updated) return res.status(404).json({ error: 'Faculty not found' });
       await addAuditLog('Admin', 'Admin', 'UPDATE_FACULTY', 'USER_MGMT', `Updated faculty ${updated.fullName}`);
       res.json(updated);
     } catch (err: any) {
+      console.error('Error in PUT /api/faculty/:id:', err);
       res.status(500).json({ error: err.message });
     }
   });

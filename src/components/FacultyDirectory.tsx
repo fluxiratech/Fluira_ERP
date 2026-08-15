@@ -22,6 +22,9 @@ import {
   Layers,
   GraduationCap,
   Sparkles,
+  Info,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
 import { exportReportToPDF, exportReportToExcel, exportReportToCSV } from '../utils/reportExporter';
 import { convertFileToJPGDataUrl } from '../utils/imageUtils';
@@ -151,6 +154,30 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   const [selectedDivisionToAdd, setSelectedDivisionToAdd] = useState('All Divisions');
   const [serverError, setServerError] = useState<string | null>(null);
 
+  // Dynamic inline warning toast / alert state
+  const [inlineConflictToast, setInlineConflictToast] = useState<{
+    id: string;
+    type: 'conflict' | 'info' | 'success';
+    title: string;
+    subjectName: string;
+    subjectCode: string;
+    facultyName?: string;
+    facultyDesignation?: string;
+    division?: string;
+    message: string;
+    actionHint?: string;
+  } | null>(null);
+
+  // Auto-dismiss conflict toast after 8 seconds
+  useEffect(() => {
+    if (inlineConflictToast) {
+      const timer = setTimeout(() => {
+        setInlineConflictToast(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [inlineConflictToast]);
+
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const canEdit = userRole === 'Admin' || userRole === 'HOD' || userRole === 'Class Teacher';
@@ -264,6 +291,78 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
     return conflicts;
   }, [allocatedSubjects, subjects, otherFacultyAllocationsList]);
+
+  // Global directory-wide overlap/collision detection across all faculty members
+  const globalFacultyOverlaps = useMemo(() => {
+    const overlaps: {
+      facultyA: Faculty;
+      facultyB: Faculty;
+      subject: { id: string; code: string; name: string };
+      collidingDivision: string;
+    }[] = [];
+
+    const facultyOverlapMap = new Map<string, Array<{ subjectName: string; code: string; otherName: string; division: string }>>();
+
+    for (let i = 0; i < facList.length; i++) {
+      const facA = facList[i];
+      const allocsA = (facA.allocatedSubjects || []).map(parseAllocItem);
+
+      for (let j = i + 1; j < facList.length; j++) {
+        const facB = facList[j];
+        const allocsB = (facB.allocatedSubjects || []).map(parseAllocItem);
+
+        for (const a of allocsA) {
+          if (!a.subjectId) continue;
+          const subObj =
+            subjects.find((s) => s.id === a.subjectId || s.code === a.subjectId) || {
+              id: a.subjectId,
+              code: a.subjectId,
+              name: a.subjectId,
+            };
+
+          for (const b of allocsB) {
+            if (!b.subjectId) continue;
+            const matches =
+              b.subjectId === a.subjectId ||
+              b.subjectId === subObj.id ||
+              b.subjectId === subObj.code;
+
+            if (matches) {
+              const collision = checkDivCollision(a.division, b.division);
+              if (collision.isConflict) {
+                overlaps.push({
+                  facultyA: facA,
+                  facultyB: facB,
+                  subject: subObj,
+                  collidingDivision: collision.collidingLabel,
+                });
+
+                const listA = facultyOverlapMap.get(facA.id) || [];
+                listA.push({
+                  subjectName: subObj.name,
+                  code: subObj.code,
+                  otherName: facB.fullName,
+                  division: collision.collidingLabel,
+                });
+                facultyOverlapMap.set(facA.id, listA);
+
+                const listB = facultyOverlapMap.get(facB.id) || [];
+                listB.push({
+                  subjectName: subObj.name,
+                  code: subObj.code,
+                  otherName: facA.fullName,
+                  division: collision.collidingLabel,
+                });
+                facultyOverlapMap.set(facB.id, listB);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { overlaps, facultyOverlapMap };
+  }, [facList, subjects]);
 
   const filtered = facList.filter((f) => {
     const matchesDept = selectedDept === 'ALL' || f.departmentId === selectedDept;
@@ -395,11 +494,63 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
   const toggleSubjectAllocation = (subId: string, defaultDiv: string = 'All Divisions') => {
     setServerError(null);
+    const subObj = subjects.find((s) => s.id === subId || s.code === subId) || {
+      id: subId,
+      code: subId,
+      name: subId,
+    };
+
     setAllocatedSubjects((prev) => {
       const exists = prev.some((item) => item.subjectId === subId);
       if (exists) {
+        setInlineConflictToast({
+          id: String(Date.now()),
+          type: 'info',
+          title: 'Subject Removed',
+          subjectName: subObj.name,
+          subjectCode: subObj.code,
+          message: `Removed ${subObj.name} (${subObj.code}) from faculty subject workload allocations.`,
+        });
         return prev.filter((item) => item.subjectId !== subId);
       } else {
+        // Pre-check for collision against other faculty allocations
+        const conflict = checkAllocationConflict(subId, defaultDiv, (subObj as any).code);
+        const otherTeachers = getOtherAllocationsForSubject(subId, (subObj as any).code);
+
+        if (conflict) {
+          setInlineConflictToast({
+            id: String(Date.now()),
+            type: 'conflict',
+            title: 'Subject Assignment Conflict Detected',
+            subjectName: subObj.name,
+            subjectCode: subObj.code,
+            facultyName: conflict.facultyName,
+            facultyDesignation: conflict.facultyDesignation,
+            division: conflict.collidingDivision,
+            message: `"${subObj.name}" (${subObj.code}) is already assigned to ${conflict.facultyName} (${conflict.facultyDesignation}) on ${conflict.collidingDivision}.`,
+            actionHint: `To assign this subject, choose a different division (e.g. Div B or Div C) to allow parallel division teaching.`,
+          });
+        } else if (otherTeachers.length > 0) {
+          setInlineConflictToast({
+            id: String(Date.now()),
+            type: 'info',
+            title: 'Parallel Division Allocation',
+            subjectName: subObj.name,
+            subjectCode: subObj.code,
+            message: `"${subObj.name}" is also taught by ${otherTeachers.map((t) => `${t.facultyName} (${t.division})`).join(', ')}.`,
+            actionHint: `Allocated to ${defaultDiv}.`,
+          });
+        } else {
+          setInlineConflictToast({
+            id: String(Date.now()),
+            type: 'success',
+            title: 'Subject Allocated',
+            subjectName: subObj.name,
+            subjectCode: subObj.code,
+            message: `Successfully linked ${subObj.name} (${subObj.code}) on ${defaultDiv}.`,
+          });
+        }
+
         return [...prev, { subjectId: subId, division: defaultDiv }];
       }
     });
@@ -407,6 +558,36 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
   const updateSubjectDivision = (subId: string, newDivision: string) => {
     setServerError(null);
+    const subObj = subjects.find((s) => s.id === subId || s.code === subId) || {
+      id: subId,
+      code: subId,
+      name: subId,
+    };
+    const conflict = checkAllocationConflict(subId, newDivision, (subObj as any).code);
+    if (conflict) {
+      setInlineConflictToast({
+        id: String(Date.now()),
+        type: 'conflict',
+        title: 'Division Collision Detected',
+        subjectName: subObj.name,
+        subjectCode: subObj.code,
+        facultyName: conflict.facultyName,
+        facultyDesignation: conflict.facultyDesignation,
+        division: conflict.collidingDivision,
+        message: `Switching to "${newDivision}" collides with ${conflict.facultyName} on ${conflict.collidingDivision}.`,
+        actionHint: 'Please choose an unassigned division for this subject or adjust existing allocations.',
+      });
+    } else {
+      setInlineConflictToast({
+        id: String(Date.now()),
+        type: 'info',
+        title: 'Division Updated',
+        subjectName: subObj.name,
+        subjectCode: subObj.code,
+        message: `Updated ${subObj.name} division to ${newDivision}.`,
+      });
+    }
+
     setAllocatedSubjects((prev) =>
       prev.map((item) =>
         item.subjectId === subId ? { ...item, division: newDivision } : item
@@ -417,6 +598,51 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   const handleAddSelectedSubject = () => {
     if (!selectedSubjectToAdd) return;
     setServerError(null);
+    const subId = selectedSubjectToAdd;
+    const div = selectedDivisionToAdd;
+    const subObj = subjects.find((s) => s.id === subId || s.code === subId) || {
+      id: subId,
+      code: subId,
+      name: subId,
+    };
+
+    const conflict = checkAllocationConflict(subId, div, (subObj as any).code);
+    const otherTeachers = getOtherAllocationsForSubject(subId, (subObj as any).code);
+
+    if (conflict) {
+      setInlineConflictToast({
+        id: String(Date.now()),
+        type: 'conflict',
+        title: 'Subject Assignment Conflict Detected',
+        subjectName: subObj.name,
+        subjectCode: subObj.code,
+        facultyName: conflict.facultyName,
+        facultyDesignation: conflict.facultyDesignation,
+        division: conflict.collidingDivision,
+        message: `"${subObj.name}" (${subObj.code}) is already assigned to ${conflict.facultyName} (${conflict.facultyDesignation}) on ${conflict.collidingDivision}.`,
+        actionHint: `Select a non-conflicting division (e.g. Div B or Div C) to allow parallel division teaching.`,
+      });
+    } else if (otherTeachers.length > 0) {
+      setInlineConflictToast({
+        id: String(Date.now()),
+        type: 'info',
+        title: 'Parallel Division Allocation',
+        subjectName: subObj.name,
+        subjectCode: subObj.code,
+        message: `"${subObj.name}" is also taught by ${otherTeachers.map((t) => `${t.facultyName} (${t.division})`).join(', ')}.`,
+        actionHint: `Allocated to ${div}.`,
+      });
+    } else {
+      setInlineConflictToast({
+        id: String(Date.now()),
+        type: 'success',
+        title: 'Subject Allocated',
+        subjectName: subObj.name,
+        subjectCode: subObj.code,
+        message: `Successfully added ${subObj.name} (${subObj.code}) on ${div}.`,
+      });
+    }
+
     setAllocatedSubjects((prev) => {
       const exists = prev.some((item) => item.subjectId === selectedSubjectToAdd);
       if (exists) {
@@ -469,6 +695,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
       .filter(Boolean) as FacultySubjectAllocation[];
 
     // Save formatted subject allocations string list or objects
+    const rawSubjectIds = allocatedSubjects.map((item) => item.subjectId);
     const formattedAllocatedSubjects = allocatedSubjects.map(
       (item) => `${item.subjectId}::${item.division || 'All Divisions'}`
     );
@@ -494,7 +721,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         const response = await fetch(`/api/faculty/${editingFaculty.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedFac),
+          body: JSON.stringify({
+            ...updatedFac,
+            subjectIds: rawSubjectIds,
+          }),
         });
 
         if (!response.ok) {
@@ -504,10 +734,11 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         }
 
         const serverUpdated = await response.json();
+        const finalFac = serverUpdated.id ? serverUpdated : updatedFac;
         setFacList((prev) =>
-          prev.map((f) => (f.id === editingFaculty.id ? (serverUpdated.id ? serverUpdated : updatedFac) : f))
+          prev.map((f) => (f.id === editingFaculty.id ? finalFac : f))
         );
-        if (onUpdateFaculty) onUpdateFaculty(editingFaculty.id, serverUpdated || updatedFac);
+        if (onUpdateFaculty) onUpdateFaculty(editingFaculty.id, finalFac);
         setShowModal(false);
       } catch (err: any) {
         setServerError(err.message || 'Network error updating faculty record.');
@@ -535,7 +766,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         const response = await fetch('/api/faculty', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newFac),
+          body: JSON.stringify({
+            ...newFac,
+            subjectIds: rawSubjectIds,
+          }),
         });
 
         if (!response.ok) {
@@ -545,8 +779,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         }
 
         const serverCreated = await response.json();
-        setFacList((prev) => [...prev, serverCreated || newFac]);
-        if (onAddFaculty) onAddFaculty(serverCreated || newFac);
+        const finalCreated = serverCreated.id ? serverCreated : newFac;
+        setFacList((prev) => [...prev, finalCreated]);
+        if (onAddFaculty) onAddFaculty(finalCreated);
         setShowModal(false);
       } catch (err: any) {
         setServerError(err.message || 'Network error creating faculty record.');
@@ -659,6 +894,40 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         </div>
       </div>
 
+      {/* Directory-Wide Subject Overlap Warning Banner */}
+      {globalFacultyOverlaps.overlaps.length > 0 && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-950 text-xs space-y-2 shadow-xs">
+          <div className="flex items-center space-x-2 font-bold text-amber-900 text-sm">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>Warning: Subject Allocation Overlap Detected ({globalFacultyOverlaps.overlaps.length})</span>
+          </div>
+          <p className="text-amber-800 text-[11px]">
+            The following subjects have conflicting faculty assignments on overlapping divisions. Click 'Edit' on the respective faculty card to resolve the collision:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+            {globalFacultyOverlaps.overlaps.map((ov, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between p-2 rounded-xl bg-white/90 border border-amber-200 text-slate-800 text-xs"
+              >
+                <div className="truncate">
+                  <span className="font-bold text-slate-900 block truncate">
+                    {ov.subject.name} ({ov.subject.code})
+                  </span>
+                  <span className="text-[10px] text-amber-800 font-semibold">
+                    Colliding Division: <strong>{ov.collidingDivision}</strong>
+                  </span>
+                </div>
+                <div className="text-right text-[10px] shrink-0 pl-2">
+                  <span className="font-semibold text-indigo-700 block">{ov.facultyA.fullName}</span>
+                  <span className="font-semibold text-rose-700 block">& {ov.facultyB.fullName}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Filter & Search Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4 text-xs font-medium">
         <div className="flex items-center space-x-2 flex-1 max-w-md">
@@ -694,6 +963,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
       {/* Faculty Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.map((fac) => {
+          const overlapWarnings = globalFacultyOverlaps.facultyOverlapMap.get(fac.id);
+          const hasCardOverlap = Boolean(overlapWarnings && overlapWarnings.length > 0);
+
           // Resolve current allocations with division metadata
           const displayedAllocations: FacultySubjectAllocation[] =
             fac.currentAllocations && fac.currentAllocations.length > 0
@@ -716,9 +988,21 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
           return (
             <div
               key={fac.id}
-              className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200"
+              className={`bg-white rounded-2xl border shadow-sm p-5 space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200 ${
+                hasCardOverlap ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'
+              }`}
             >
               <div className="space-y-3">
+                {/* Overlap Flag Tag on Card */}
+                {hasCardOverlap && (
+                  <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl text-[10px] font-bold">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="truncate">
+                      Overlap: {overlapWarnings?.map((w) => `${w.subjectName} (${w.division}) with ${w.otherName}`).join(', ')}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
                     <img
@@ -790,13 +1074,22 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                         {displayedAllocations.map((alloc, idx) => {
                           const divLabel = alloc.division || 'All Divisions';
                           const isSpecificDiv = divLabel !== 'All Divisions' && divLabel !== 'ALL';
+                          const isPillCollision = overlapWarnings?.some((w) => w.code === alloc.code || w.subjectName === alloc.name);
 
                           return (
                             <div
                               key={`${alloc.id}-${idx}`}
-                              className="group relative inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-[11px] text-slate-700 transition shadow-xs max-w-full"
+                              className={`group relative inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg border text-[11px] transition shadow-xs max-w-full ${
+                                isPillCollision
+                                  ? 'bg-amber-50 border-amber-300 text-amber-950'
+                                  : 'bg-slate-50 hover:bg-indigo-50 border-slate-200 hover:border-indigo-200 text-slate-700'
+                              }`}
                             >
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                              {isPillCollision ? (
+                                <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" title="Overlapping assignment with another faculty member" />
+                              ) : (
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                              )}
                               <span className="font-semibold text-slate-800 truncate" title={alloc.name}>
                                 {alloc.name}
                               </span>
@@ -805,7 +1098,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                               </span>
                               <span
                                 className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
-                                  isSpecificDiv
+                                  isPillCollision
+                                    ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                                    : isSpecificDiv
                                     ? 'bg-purple-100 text-purple-700 border border-purple-200'
                                     : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
                                 }`}
@@ -866,6 +1161,57 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                 <div>
                   <span className="font-bold block">Allocation Error:</span>
                   <span>{serverError}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Inline Conflict / Allocation Warning Toast with Action Hint */}
+            {inlineConflictToast && (
+              <div
+                className={`p-3.5 rounded-xl border text-xs shadow-md transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${
+                  inlineConflictToast.type === 'conflict'
+                    ? 'bg-amber-50 border-amber-300 text-amber-950'
+                    : inlineConflictToast.type === 'info'
+                    ? 'bg-blue-50 border-blue-200 text-blue-950'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start space-x-2.5">
+                    {inlineConflictToast.type === 'conflict' ? (
+                      <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    ) : inlineConflictToast.type === 'info' ? (
+                      <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-0.5">
+                      <div className="font-bold flex items-center space-x-2">
+                        <span>{inlineConflictToast.title}</span>
+                        {inlineConflictToast.subjectCode && (
+                          <span className="font-mono text-[10px] px-1.5 py-0.2 bg-black/10 rounded font-semibold">
+                            {inlineConflictToast.subjectCode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-800 leading-relaxed font-medium">
+                        {inlineConflictToast.message}
+                      </p>
+                      {inlineConflictToast.actionHint && (
+                        <p className="text-[11px] text-amber-800 font-semibold mt-1">
+                          💡 {inlineConflictToast.actionHint}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInlineConflictToast(null)}
+                    className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-black/5 shrink-0"
+                    title="Dismiss Notification"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             )}
@@ -1167,6 +1513,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                       filteredAvailableSubjects.map((sub) => {
                         const isSelected = allocatedSubjects.some((a) => a.subjectId === sub.id);
                         const otherTeachers = getOtherAllocationsForSubject(sub.id, sub.code);
+                        const catalogConflict = checkAllocationConflict(sub.id, selectedDivisionToAdd, sub.code);
 
                         return (
                           <div
@@ -1175,6 +1522,8 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                             className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition text-xs border ${
                               isSelected
                                 ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-semibold'
+                                : catalogConflict
+                                ? 'bg-amber-50/50 border-amber-200 text-slate-800 hover:bg-amber-100/60'
                                 : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-50'
                             }`}
                           >
@@ -1186,7 +1535,18 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                                 className="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
                               />
                               <div className="truncate">
-                                <span className="block truncate">{sub.name}</span>
+                                <div className="flex items-center space-x-1.5 truncate">
+                                  <span className="block truncate font-semibold">{sub.name}</span>
+                                  {catalogConflict && (
+                                    <span
+                                      className="px-1.5 py-0.2 bg-amber-100 border border-amber-300 text-amber-900 text-[9px] font-bold rounded flex items-center space-x-0.5 shrink-0"
+                                      title={`Conflict on ${catalogConflict.collidingDivision} with ${catalogConflict.facultyName}`}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600 inline" />
+                                      <span>Conflict ({catalogConflict.collidingDivision})</span>
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="flex items-center space-x-1 text-[10px] text-slate-500 font-normal">
                                   <span>Sem {sub.semester}</span>
                                   <span>•</span>
@@ -1200,7 +1560,11 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                             <div className="flex items-center space-x-1.5 shrink-0">
                               {otherTeachers.length > 0 ? (
                                 <span
-                                  className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-medium"
+                                  className={`px-2 py-0.5 rounded border text-[10px] font-medium ${
+                                    catalogConflict
+                                      ? 'bg-amber-100 border-amber-300 text-amber-900'
+                                      : 'bg-slate-100 border-slate-200 text-slate-700'
+                                  }`}
                                   title={otherTeachers.map((t) => `${t.facultyName} on ${t.division}`).join(', ')}
                                 >
                                   {otherTeachers.map((t) => `${t.facultyName.split(' ')[0]} (${t.division})`).join(', ')}

@@ -824,40 +824,73 @@ export async function insertFaculty(fac: Faculty): Promise<Faculty> {
   return fac;
 }
 
-export async function updateFaculty(id: string, updates: Partial<Faculty>): Promise<Faculty | null> {
-  const existing = await db.select().from(schema.facultyList).where(eq(schema.facultyList.id, id));
-  if (existing.length === 0) return null;
-  const current = mapSqlToFaculty(existing[0]);
-  const merged = { ...current, ...updates };
+export async function updateFaculty(
+  id: string,
+  updates: Partial<Faculty> & { subjectIds?: string[] }
+): Promise<Faculty | null> {
+  try {
+    const updatedRecord = await db.transaction(async (tx) => {
+      const existing = await tx.select().from(schema.facultyList).where(eq(schema.facultyList.id, id));
+      if (existing.length === 0) return null;
+      const current = mapSqlToFaculty(existing[0]);
 
-  // Update faculty record in PostgreSQL
-  await db.update(schema.facultyList).set(mapFacultyToSql(merged)).where(eq(schema.facultyList.id, id));
-
-  // Sync assignedFacultyId in subjects table if allocatedSubjects were updated
-  if (updates.allocatedSubjects !== undefined) {
-    const rawAllocated = updates.allocatedSubjects || [];
-    const newAllocatedIds = rawAllocated.map((item) => parseAllocationItem(item).subjectId);
-    const allSubjects = await db.select().from(schema.subjects);
-    
-    for (const sub of allSubjects) {
-      const isNowAllocated = newAllocatedIds.includes(sub.id) || newAllocatedIds.includes(sub.code);
-      if (isNowAllocated && sub.assignedFacultyId !== id) {
-        await db.update(schema.subjects).set({
-          assignedFacultyId: id,
-          assignedFacultyName: merged.fullName,
-        }).where(eq(schema.subjects.id, sub.id));
-      } else if (!isNowAllocated && (sub.assignedFacultyId === id || sub.assignedFacultyId === current.facultyId)) {
-        await db.update(schema.subjects).set({
-          assignedFacultyId: null,
-          assignedFacultyName: null,
-        }).where(eq(schema.subjects.id, sub.id));
+      // Normalize allocated subjects or subjectIds
+      let allocatedList = updates.allocatedSubjects;
+      if (updates.subjectIds !== undefined && allocatedList === undefined) {
+        allocatedList = updates.subjectIds;
       }
-    }
-  }
 
-  // Retrieve fresh faculty data with joined current allocations
-  const allUpdated = await getAllFaculty();
-  return allUpdated.find((f) => f.id === id) || merged;
+      const merged: Faculty = {
+        ...current,
+        ...updates,
+        allocatedSubjects: allocatedList !== undefined ? allocatedList : current.allocatedSubjects,
+      };
+
+      // 1. Atomically update the faculty_list record
+      await tx.update(schema.facultyList).set(mapFacultyToSql(merged)).where(eq(schema.facultyList.id, id));
+
+      // 2. Atomically synchronize assignedFacultyId and assignedFacultyName in the subjects table
+      if (allocatedList !== undefined) {
+        const rawAllocated = allocatedList || [];
+        const newAllocatedIds = rawAllocated.map((item) => parseAllocationItem(item).subjectId);
+        const allSubjects = await tx.select().from(schema.subjects);
+
+        for (const sub of allSubjects) {
+          const isNowAllocated = newAllocatedIds.includes(sub.id) || newAllocatedIds.includes(sub.code);
+          if (isNowAllocated) {
+            if (sub.assignedFacultyId !== id || sub.assignedFacultyName !== merged.fullName) {
+              await tx
+                .update(schema.subjects)
+                .set({
+                  assignedFacultyId: id,
+                  assignedFacultyName: merged.fullName,
+                })
+                .where(eq(schema.subjects.id, sub.id));
+            }
+          } else if (sub.assignedFacultyId === id || sub.assignedFacultyId === current.facultyId) {
+            await tx
+              .update(schema.subjects)
+              .set({
+                assignedFacultyId: null,
+                assignedFacultyName: null,
+              })
+              .where(eq(schema.subjects.id, sub.id));
+          }
+        }
+      }
+
+      return merged;
+    });
+
+    if (!updatedRecord) return null;
+
+    // Fetch and return the joined updated record with allocations
+    const allUpdated = await getAllFaculty();
+    return allUpdated.find((f) => f.id === id) || updatedRecord;
+  } catch (err) {
+    console.error(`Error in updateFaculty transaction for ${id}:`, err);
+    throw err;
+  }
 }
 
 export async function deleteFaculty(id: string): Promise<boolean> {
