@@ -714,11 +714,11 @@ export async function upsertStudent(st: Student360Profile): Promise<Student360Pr
 }
 
 export async function updateStudent(id: string, updates: Partial<Student360Profile>): Promise<Student360Profile | null> {
-  const existing = await db.select().from(schema.students).where(eq(schema.students.id, id));
+  const existing = await db.select().from(schema.students).where(or(eq(schema.students.id, id), eq(schema.students.studentId, id)));
   if (existing.length === 0) return null;
   const current = mapSqlToStudent(existing[0]);
-  const merged = { ...current, ...updates };
-  await db.update(schema.students).set(mapStudentToSql(merged)).where(eq(schema.students.id, id));
+  const merged: Student360Profile = { ...current, ...updates };
+  await db.update(schema.students).set(mapStudentToSql(merged)).where(or(eq(schema.students.id, id), eq(schema.students.studentId, id)));
   return merged;
 }
 

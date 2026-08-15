@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Student360Profile, Department, User, Program, Course, AcademicYearItem } from '../types';
-import { Users, Search, Filter, Plus, Eye, AlertTriangle, Download, CheckCircle2, CreditCard, UserCheck, BookOpen, Award, Edit2, Trash2, X, Printer, Layers, GraduationCap, FileSpreadsheet, FileText } from 'lucide-react';
+import { Users, Search, Filter, Plus, Eye, AlertTriangle, Download, CheckCircle2, CreditCard, UserCheck, BookOpen, Award, Edit2, Trash2, X, Printer, Layers, GraduationCap, FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
 import { exportReportToPDF, exportReportToExcel, exportReportToCSV, exportStudent360ToPDF } from '../utils/reportExporter';
 import { ExportReportModal } from './ExportReportModal';
 import { StudentProfileFormModal } from './StudentProfileFormModal';
@@ -12,7 +12,9 @@ interface Student360DirectoryProps {
   courses?: Course[];
   academicYears?: AcademicYearItem[];
   onOpen360: (student: Student360Profile) => void;
-  onAdmitStudent: (newStudent: Partial<Student360Profile>) => void;
+  onAdmitStudent: (newStudent: Partial<Student360Profile>) => void | Promise<void>;
+  onUpdateStudent?: (id: string, updatedStudent: Partial<Student360Profile>) => void | Promise<void>;
+  onDeleteStudent?: (id: string) => void | Promise<void>;
   userRole?: string;
   currentUser?: User;
 }
@@ -37,12 +39,38 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
   ],
   onOpen360,
   onAdmitStudent,
+  onUpdateStudent,
+  onDeleteStudent,
   userRole,
   currentUser,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [showAdmitModal, setShowAdmitModal] = useState(false);
+
+  // Synchronize state when students prop changes
+  const [studentList, setStudentList] = useState<Student360Profile[]>(students);
+  useEffect(() => {
+    setStudentList(students);
+  }, [students]);
+
+  const [editingStudent, setEditingStudent] = useState<Student360Profile | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Deletion Confirmation Dialog State
+  const [studentToDelete, setStudentToDelete] = useState<Student360Profile | null>(null);
+
+  // Loading States for Async API feedback
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (feedbackMessage) {
+      const timer = setTimeout(() => setFeedbackMessage(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedbackMessage]);
 
   // If logged in as Student, render ONLY their own 360° Profile
   if (userRole === 'Student') {
@@ -214,23 +242,6 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
     );
   }
 
-  // Form & Student State
-  const [studentList, setStudentList] = useState<Student360Profile[]>(students);
-  const [editingStudent, setEditingStudent] = useState<Student360Profile | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editCgpa, setEditCgpa] = useState<number>(8.5);
-
-  const [fullName, setFullName] = useState('');
-  const [rollNumber, setRollNumber] = useState('');
-  const [admitProgId, setAdmitProgId] = useState<string>('prog-ug');
-  const [admitCourseId, setAdmitCourseId] = useState<string>('course-baf');
-  const [admitAyCode, setAdmitAyCode] = useState<string>('FY');
-  const [departmentId, setDepartmentId] = useState(departments[0]?.id || 'dept-af');
-  const [semester, setSemester] = useState<number>(1);
-  const [division, setDivision] = useState<string>('A');
-  const [mobile, setMobile] = useState('');
-  const [email, setEmail] = useState('');
-
   // Filter & Search States
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('ALL');
   const [selectedProgFilter, setSelectedProgFilter] = useState<string>('ALL');
@@ -242,18 +253,6 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const canEdit = userRole === 'Admin' || userRole === 'HOD';
-
-  const availableCoursesForAdmit = courses.filter((c) => c.programId === admitProgId);
-  const availableAcademicYearsForAdmit = academicYears.filter((ay) => ay.programId === admitProgId);
-
-  const handleProgramChange = (progId: string) => {
-    setAdmitProgId(progId);
-    const firstCourse = courses.find((c) => c.programId === progId);
-    if (firstCourse) setAdmitCourseId(firstCourse.id);
-    const firstAy = academicYears.find((ay) => ay.programId === progId);
-    if (firstAy) setAdmitAyCode(firstAy.code);
-    setSemester(1);
-  };
 
   const filtered = studentList.filter((s) => {
     const matchesDept = selectedDeptFilter === 'ALL' || s.departmentId === selectedDeptFilter || (s.departmentName && s.departmentName.toLowerCase().includes(selectedDeptFilter.toLowerCase()));
@@ -292,131 +291,52 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
     generatedBy: 'Admin / Student Affairs Section',
   };
 
-  const handleAdmitSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const progObj = programs.find((p) => p.id === admitProgId);
-    const courseObj = courses.find((c) => c.id === admitCourseId);
-    const deptObj = departments.find((d) => d.id === departmentId) || departments[0];
-
-    const courseTitle = courseObj?.courseName || (admitProgId === 'prog-pg' ? 'M.Com Business Analytics' : 'B.Com Accounting and Finance');
-
-    const newStuObj: Student360Profile = {
-      id: `stu-${Date.now()}`,
-      studentId: `STU${Math.floor(100000 + Math.random() * 900000)}`,
-      rollNumber,
-      fullName,
-      gender: 'Male',
-      dob: '2004-01-01',
-      admissionDate: new Date().toISOString().split('T')[0],
-      passportPhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-      bloodGroup: 'O+',
-      category: 'General',
-      course: courseTitle,
-      programId: admitProgId,
-      programName: progObj?.code || 'UG',
-      courseId: admitCourseId,
-      courseCode: courseObj?.courseCode || 'BAF',
-      academicYearCode: admitAyCode,
-      departmentId: departmentId || 'dept-af',
-      departmentName: deptObj?.name || 'Department of Accounting and Finance',
-      semester,
-      division,
-      academicYear: '2024-2025',
-
-      personalMobile: mobile,
-      whatsappNumber: mobile,
-      email,
-      emergencyContact: '+91 98765 00000',
-      permanentAddress: 'Mumbai, Maharashtra',
-      temporaryAddress: 'Mumbai, Maharashtra',
-
-      fatherName: 'Rajesh Sharma',
-      motherName: 'Sunita Sharma',
-      guardianName: 'N/A',
-      parentMobile: '+91 98765 43210',
-      parentEmail: 'parent@gmail.com',
-      parentOccupation: 'Business',
-
-      sscSchoolName: 'Apex High School',
-      sscBoard: 'CBSE',
-      sscPassingYear: '2020',
-      sscPercentage: 91.2,
-
-      hscCollegeName: 'Apex Junior College',
-      hscBoard: 'HSC Board',
-      hscStream: 'Commerce',
-      hscPassingYear: '2022',
-      hscPercentage: 88.5,
-
-      sem1Gpa: 8.5,
-      sem2Gpa: 8.7,
-      sem3Gpa: 8.8,
-      sem4Gpa: 8.9,
-      overallCgpa: 8.6,
-
-      totalLectures: 160,
-      attendedLectures: 140,
-      attendancePercentage: 88,
-
-      technicalSkills: ['Financial Accounting', 'Excel', 'Tally Prime'],
-      programmingLanguages: ['Excel VBA', 'SQL'],
-      certifications: [{ title: 'GST Practitioner Certification', issuer: 'ICAI', year: '2024' }],
-      internships: [],
-      projects: [],
-      sportsAndExtra: [],
-    };
-    setStudentList((prev) => [newStuObj, ...prev]);
-    onAdmitStudent(newStuObj);
-    setShowAdmitModal(false);
-  };
-
   const handleOpenEdit = (s: Student360Profile) => {
     setEditingStudent(s);
-    setFullName(s.fullName);
-    setRollNumber(s.rollNumber);
-    setDepartmentId(s.departmentId);
-    setSemester(s.semester);
-    setDivision(s.division);
-    setMobile(s.personalMobile);
-    setEmail(s.email);
-    setEditCgpa(s.overallCgpa);
     setShowEditModal(true);
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingStudent) return;
-    const deptObj = departments.find((d) => d.id === departmentId);
-    setStudentList((prev) =>
-      prev.map((s) =>
-        s.id === editingStudent.id
-          ? {
-              ...s,
-              fullName,
-              rollNumber,
-              departmentId,
-              departmentName: deptObj?.name || s.departmentName,
-              semester: Number(semester),
-              division,
-              personalMobile: mobile,
-              email,
-              overallCgpa: Number(editCgpa),
-            }
-          : s
-      )
-    );
-    setShowEditModal(false);
-  };
-
-  const handleDeleteStudent = (id: string) => {
-    if (confirm('Are you sure you want to delete this student profile record?')) {
-      setStudentList((prev) => prev.filter((s) => s.id !== id));
+  const handleConfirmDelete = async () => {
+    if (!studentToDelete) return;
+    const target = studentToDelete;
+    setActionLoadingId(target.id);
+    
+    try {
+      if (onDeleteStudent) {
+        await onDeleteStudent(target.id);
+      }
+      setStudentList((prev) => prev.filter((s) => s.id !== target.id && s.studentId !== target.id));
+      setFeedbackMessage({ type: 'success', text: `Student ${target.fullName} (${target.rollNumber}) deleted successfully from database.` });
+    } catch (err: any) {
+      setFeedbackMessage({ type: 'error', text: `Failed to delete student: ${err.message || 'Server error'}` });
+    } finally {
+      setActionLoadingId(null);
+      setStudentToDelete(null);
     }
   };
 
   return (
     <div className="space-y-6">
       
+      {/* Action Notification Banner */}
+      {feedbackMessage && (
+        <div className={`p-4 rounded-2xl border flex items-center space-x-3 transition-all ${
+          feedbackMessage.type === 'success' 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          {feedbackMessage.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          )}
+          <span className="text-xs font-semibold">{feedbackMessage.text}</span>
+          <button onClick={() => setFeedbackMessage(null)} className="ml-auto p-1 hover:bg-black/5 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -561,69 +481,83 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
       {/* Student Cards Roster */}
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((s) => (
-            <div key={s.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition p-5 flex flex-col justify-between space-y-4">
-              <div className="flex items-start space-x-4">
-                <img src={s.passportPhoto} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-indigo-100 shrink-0" alt="" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900 truncate">{s.fullName}</span>
-                    <div className="flex items-center space-x-1.5 shrink-0">
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
-                        {s.rollNumber}
-                      </span>
-                      {canEdit && (
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => handleOpenEdit(s)}
-                            className="p-1 hover:bg-slate-100 text-indigo-600 rounded transition"
-                            title="Edit Student Profile"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStudent(s.id)}
-                            className="p-1 hover:bg-rose-100 text-rose-600 rounded transition"
-                            title="Delete Student Record"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
+          {filtered.map((s) => {
+            const isItemLoading = actionLoadingId === s.id;
+            return (
+              <div key={s.id} className="relative bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition p-5 flex flex-col justify-between space-y-4">
+                {isItemLoading && (
+                  <div className="absolute inset-0 bg-white/80 backdrop-blur-xs rounded-2xl z-10 flex flex-col items-center justify-center space-y-2">
+                    <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
+                    <span className="text-xs font-bold text-slate-700">Updating database...</span>
+                  </div>
+                )}
+
+                <div className="flex items-start space-x-4">
+                  <img src={s.passportPhoto} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-indigo-100 shrink-0" alt="" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900 truncate">{s.fullName}</span>
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
+                          {s.rollNumber}
+                        </span>
+                        {canEdit && (
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => handleOpenEdit(s)}
+                              disabled={isItemLoading}
+                              className="p-1 hover:bg-slate-100 text-indigo-600 rounded transition disabled:opacity-50"
+                              title="Edit Student Profile"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setStudentToDelete(s)}
+                              disabled={isItemLoading}
+                              className="p-1 hover:bg-rose-100 text-rose-600 rounded transition disabled:opacity-50"
+                              title="Delete Student Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 mt-0.5">{s.course}</p>
+                    <p className="text-[11px] text-slate-600 font-medium">
+                      {s.departmentName} • Sem {s.semester}-{s.division}
+                    </p>
+
+                    <div className="flex items-center space-x-3 mt-2 text-[11px]">
+                      <span>Att: <strong className={s.attendancePercentage >= 75 ? 'text-emerald-600' : 'text-rose-600'}>{s.attendancePercentage}%</strong></span>
+                      <span>CGPA: <strong className="text-indigo-600">{s.overallCgpa}</strong></span>
                     </div>
                   </div>
+                </div>
 
-                  <p className="text-[11px] text-slate-500 mt-0.5">{s.course}</p>
-                  <p className="text-[11px] text-slate-600 font-medium">
-                    {s.departmentName} • Sem {s.semester}-{s.division}
-                  </p>
-
-                  <div className="flex items-center space-x-3 mt-2 text-[11px]">
-                    <span>Att: <strong className={s.attendancePercentage >= 75 ? 'text-emerald-600' : 'text-rose-600'}>{s.attendancePercentage}%</strong></span>
-                    <span>CGPA: <strong className="text-indigo-600">{s.overallCgpa}</strong></span>
-                  </div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => onOpen360(s)}
+                    disabled={isItemLoading}
+                    className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition shadow-sm disabled:opacity-50"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>360° Profile</span>
+                  </button>
+                  <button
+                    onClick={() => exportStudent360ToPDF(s)}
+                    disabled={isItemLoading}
+                    className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition disabled:opacity-50"
+                    title="Export Official Student 360° PDF Dossier"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download PDF</span>
+                  </button>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-                <button
-                  onClick={() => onOpen360(s)}
-                  className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition shadow-sm"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>360° Profile</span>
-                </button>
-                <button
-                  onClick={() => exportStudent360ToPDF(s)}
-                  className="py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition"
-                  title="Export Official Student 360° PDF Dossier"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download PDF</span>
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-4">
@@ -646,6 +580,71 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
         </div>
       )}
 
+      {/* Confirmation Dialog for Deleting Student */}
+      {studentToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-slate-900">Confirm Student Deletion</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Are you sure you want to delete the student profile for <strong className="text-slate-800">{studentToDelete.fullName}</strong> ({studentToDelete.rollNumber})?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Student ID:</span>
+                <span className="font-mono font-bold text-slate-700">{studentToDelete.studentId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Course & Sem:</span>
+                <span className="font-semibold text-slate-700">{studentToDelete.course} (Sem {studentToDelete.semester}-{studentToDelete.division})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Department:</span>
+                <span className="text-slate-700">{studentToDelete.departmentName}</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-rose-600 font-medium">
+              ⚠️ This will permanently remove the student's records from the database.
+            </p>
+
+            <div className="flex items-center justify-end space-x-3 pt-2">
+              <button
+                onClick={() => setStudentToDelete(null)}
+                disabled={actionLoadingId !== null}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={actionLoadingId !== null}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {actionLoadingId === studentToDelete.id ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting from DB...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Comprehensive Student Profile Form Modals (Create & Edit) */}
       <StudentProfileFormModal
         isOpen={showAdmitModal}
@@ -654,9 +653,18 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
         programs={programs}
         courses={courses}
         onClose={() => setShowAdmitModal(false)}
-        onSave={(newStudent) => {
-          setStudentList((prev) => [newStudent, ...prev]);
-          onAdmitStudent(newStudent);
+        onSave={async (newStudent) => {
+          setIsUpdating(true);
+          try {
+            await onAdmitStudent(newStudent);
+            setStudentList((prev) => [newStudent, ...prev]);
+            setFeedbackMessage({ type: 'success', text: `New student ${newStudent.fullName} admitted and stored in PostgreSQL.` });
+            setShowAdmitModal(false);
+          } catch (err: any) {
+            setFeedbackMessage({ type: 'error', text: `Error admitting student: ${err.message || 'Server error'}` });
+          } finally {
+            setIsUpdating(false);
+          }
         }}
       />
 
@@ -671,11 +679,25 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
           setShowEditModal(false);
           setEditingStudent(null);
         }}
-        onSave={(updatedStudent) => {
-          setStudentList((prev) =>
-            prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s))
-          );
-          onAdmitStudent(updatedStudent);
+        onSave={async (updatedStudent) => {
+          setIsUpdating(true);
+          try {
+            if (onUpdateStudent) {
+              await onUpdateStudent(updatedStudent.id, updatedStudent);
+            } else {
+              await onAdmitStudent(updatedStudent);
+            }
+            setStudentList((prev) =>
+              prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s))
+            );
+            setFeedbackMessage({ type: 'success', text: `Student ${updatedStudent.fullName} profile updated in PostgreSQL database.` });
+            setShowEditModal(false);
+            setEditingStudent(null);
+          } catch (err: any) {
+            setFeedbackMessage({ type: 'error', text: `Failed to update student: ${err.message || 'Server error'}` });
+          } finally {
+            setIsUpdating(false);
+          }
         }}
       />
 

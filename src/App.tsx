@@ -306,7 +306,7 @@ export default function App() {
     }
   };
 
-  // Student Admission Handler
+  // Student Admission, Update, and Delete Handlers
   const handleAdmitStudent = async (newStudent: Partial<Student360Profile>) => {
     const ns = newStudent as any;
     const docId = newStudent.id || `stu-${Date.now()}`;
@@ -374,6 +374,50 @@ export default function App() {
       });
     } catch (err) {
       console.error('Error admitting student:', err);
+    }
+  };
+
+  const handleUpdateStudent = async (id: string, updatedStudent: Partial<Student360Profile>): Promise<void> => {
+    setStudents((prev) =>
+      prev.map((s) => (s.id === id ? ({ ...s, ...updatedStudent } as Student360Profile) : s))
+    );
+    if (selected360Student?.id === id) {
+      setSelected360Student((prev) => (prev ? ({ ...prev, ...updatedStudent } as Student360Profile) : null));
+    }
+
+    try {
+      const res = await fetch(`/api/students/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedStudent),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to update student: ${res.statusText}`);
+      }
+    } catch (err) {
+      console.error('Error updating student profile in DB:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteStudent = async (id: string): Promise<void> => {
+    setStudents((prev) => prev.filter((s) => s.id !== id && s.studentId !== id));
+    if (selected360Student?.id === id || selected360Student?.studentId === id) {
+      setSelected360Student(null);
+    }
+    // Also remove from user login list if exists
+    setUsersList((prev) => prev.filter((u) => u.id !== `u-${id}` && u.linkedStudentId !== id));
+
+    try {
+      const res = await fetch(`/api/students/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to delete student: ${res.statusText}`);
+      }
+    } catch (err) {
+      console.error('Error deleting student from DB:', err);
+      throw err;
     }
   };
 
@@ -1201,6 +1245,8 @@ export default function App() {
               academicYears={academicYears}
               onOpen360={(stu) => setSelected360Student(stu)}
               onAdmitStudent={handleAdmitStudent}
+              onUpdateStudent={handleUpdateStudent}
+              onDeleteStudent={handleDeleteStudent}
               userRole={currentUser.role}
               currentUser={currentUser}
             />
