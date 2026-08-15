@@ -27,6 +27,7 @@ import {
   ImportHistoryLog,
   PromotionBatch,
   ClassTeacherAssignment,
+  FacultySubjectAllocation,
 } from '../types';
 
 import {
@@ -730,6 +731,28 @@ export async function deleteStudent(id: string): Promise<boolean> {
 // -------------------------------------------------------------
 // FACULTY OPERATIONS
 // -------------------------------------------------------------
+export function parseAllocationItem(item: any): { subjectId: string; division: string; divisions: string[] } {
+  if (!item) return { subjectId: '', division: 'All Divisions', divisions: ['ALL'] };
+  if (typeof item === 'object') {
+    const subId = item.subjectId || item.id || '';
+    const division = item.division || (item.divisions && item.divisions.length > 0 ? item.divisions.join(', ') : 'All Divisions');
+    const divisions = item.divisions && item.divisions.length > 0 ? item.divisions : (item.division ? [item.division] : ['ALL']);
+    return { subjectId: subId, division, divisions };
+  }
+  if (typeof item === 'string') {
+    if (item.includes('::')) {
+      const [subId, div] = item.split('::');
+      return { subjectId: subId.trim(), division: div.trim(), divisions: [div.trim()] };
+    }
+    if (item.includes('#')) {
+      const [subId, div] = item.split('#');
+      return { subjectId: subId.trim(), division: div.trim(), divisions: [div.trim()] };
+    }
+    return { subjectId: item.trim(), division: 'All Divisions', divisions: ['ALL'] };
+  }
+  return { subjectId: String(item), division: 'All Divisions', divisions: ['ALL'] };
+}
+
 export async function getAllFaculty(): Promise<Faculty[]> {
   try {
     const rows = await db.select().from(schema.facultyList);
@@ -738,30 +761,52 @@ export async function getAllFaculty(): Promise<Faculty[]> {
     // Fetch all subjects to join linked allocations
     const subjectRows = await db.select().from(schema.subjects);
 
-    // Join subject details for each faculty member
+    // Join subject details for each faculty member with division-specific mapping
     return facultyList.map((fac) => {
-      const allocatedIds = fac.allocatedSubjects || [];
-      
-      // Match subjects linked directly via allocatedSubjects ID/Code array OR assignedFacultyId in subjects table
-      const joinedSubjects = subjectRows.filter((sub) => {
-        return (
-          allocatedIds.includes(sub.id) ||
-          allocatedIds.includes(sub.code) ||
-          sub.assignedFacultyId === fac.id ||
-          sub.assignedFacultyId === fac.facultyId
-        );
-      });
+      const rawAllocations = fac.allocatedSubjects || [];
+      const parsedAllocations = rawAllocations.map(parseAllocationItem);
 
-      const currentAllocations = joinedSubjects.map((s) => ({
-        id: s.id,
-        code: s.code,
-        name: s.name,
-        semester: Number(s.semester),
-        credits: Number(s.credits),
-        type: s.type,
-        courseCode: s.courseCode || undefined,
-        departmentId: s.departmentId || undefined,
-      }));
+      const currentAllocations: FacultySubjectAllocation[] = [];
+      const processedSubIds = new Set<string>();
+
+      for (const alloc of parsedAllocations) {
+        if (!alloc.subjectId) continue;
+        const matchedSub = subjectRows.find((s) => s.id === alloc.subjectId || s.code === alloc.subjectId);
+        if (matchedSub) {
+          processedSubIds.add(matchedSub.id);
+          processedSubIds.add(matchedSub.code);
+          currentAllocations.push({
+            id: matchedSub.id,
+            code: matchedSub.code,
+            name: matchedSub.name,
+            semester: Number(matchedSub.semester),
+            credits: Number(matchedSub.credits),
+            type: matchedSub.type,
+            division: alloc.division || 'All Divisions',
+            divisions: alloc.divisions || ['ALL'],
+            courseCode: matchedSub.courseCode || undefined,
+            departmentId: matchedSub.departmentId || undefined,
+          });
+        }
+      }
+
+      // Also include any subjects where assignedFacultyId matches this faculty
+      for (const s of subjectRows) {
+        if ((s.assignedFacultyId === fac.id || s.assignedFacultyId === fac.facultyId) && !processedSubIds.has(s.id)) {
+          currentAllocations.push({
+            id: s.id,
+            code: s.code,
+            name: s.name,
+            semester: Number(s.semester),
+            credits: Number(s.credits),
+            type: s.type,
+            division: 'All Divisions',
+            divisions: ['ALL'],
+            courseCode: s.courseCode || undefined,
+            departmentId: s.departmentId || undefined,
+          });
+        }
+      }
 
       return {
         ...fac,
@@ -790,7 +835,8 @@ export async function updateFaculty(id: string, updates: Partial<Faculty>): Prom
 
   // Sync assignedFacultyId in subjects table if allocatedSubjects were updated
   if (updates.allocatedSubjects !== undefined) {
-    const newAllocatedIds = updates.allocatedSubjects || [];
+    const rawAllocated = updates.allocatedSubjects || [];
+    const newAllocatedIds = rawAllocated.map((item) => parseAllocationItem(item).subjectId);
     const allSubjects = await db.select().from(schema.subjects);
     
     for (const sub of allSubjects) {

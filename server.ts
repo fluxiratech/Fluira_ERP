@@ -49,6 +49,7 @@ import {
   insertFaculty,
   updateFaculty,
   deleteFaculty,
+  parseAllocationItem,
   getAllPrograms,
   insertProgram,
   updateProgram,
@@ -444,8 +445,97 @@ async function startServer() {
     }
   });
 
+  // Helper: Normalize division list
+  function normalizeDivisions(divs: string[] | string | undefined): string[] {
+    if (!divs) return ['ALL'];
+    const arr = Array.isArray(divs) ? divs : [divs];
+    const set = new Set<string>();
+    for (const d of arr) {
+      const trimmed = d.trim().toUpperCase();
+      if (trimmed.includes('ALL') || trimmed === '' || trimmed === 'ALL DIVISIONS') {
+        return ['ALL'];
+      }
+      const match = trimmed.match(/(?:DIV(?:ISION)?\s*)?([A-Z0-9]+)/);
+      if (match && match[1]) {
+        set.add(match[1]);
+      } else {
+        set.add(trimmed);
+      }
+    }
+    return Array.from(set);
+  }
+
+  // Helper: Check division-specific collision between two allocation targets
+  function checkDivisionCollision(
+    divs1: string[] | string | undefined,
+    divs2: string[] | string | undefined
+  ): { hasConflict: boolean; collidingDivision?: string } {
+    const norm1 = normalizeDivisions(divs1);
+    const norm2 = normalizeDivisions(divs2);
+
+    if (norm1.includes('ALL') && norm2.includes('ALL')) {
+      return { hasConflict: true, collidingDivision: 'All Divisions' };
+    }
+
+    if (norm1.includes('ALL')) {
+      return { hasConflict: true, collidingDivision: `Division ${norm2.join(', ')}` };
+    }
+
+    if (norm2.includes('ALL')) {
+      return { hasConflict: true, collidingDivision: `Division ${norm1.join(', ')}` };
+    }
+
+    for (const d of norm1) {
+      if (norm2.includes(d)) {
+        return { hasConflict: true, collidingDivision: `Division ${d}` };
+      }
+    }
+
+    return { hasConflict: false };
+  }
+
   app.post('/api/faculty', async (req, res) => {
     try {
+      const { allocatedSubjects } = req.body;
+
+      if (Array.isArray(allocatedSubjects) && allocatedSubjects.length > 0) {
+        const [allFaculty, allSubjects] = await Promise.all([
+          getAllFaculty(),
+          getAllSubjects(),
+        ]);
+
+        for (const rawAlloc of allocatedSubjects) {
+          const parsed = parseAllocationItem(rawAlloc);
+          const matchedSubject = allSubjects.find((s) => s.id === parsed.subjectId || s.code === parsed.subjectId);
+          const subjectName = matchedSubject ? `${matchedSubject.name} (${matchedSubject.code})` : parsed.subjectId;
+
+          for (const other of allFaculty) {
+            const otherAllocations = (other.allocatedSubjects || []).map(parseAllocationItem);
+            for (const otherAlloc of otherAllocations) {
+              const matchesSub =
+                otherAlloc.subjectId === parsed.subjectId ||
+                (matchedSubject && (otherAlloc.subjectId === matchedSubject.id || otherAlloc.subjectId === matchedSubject.code));
+
+              if (matchesSub) {
+                const collision = checkDivisionCollision(parsed.divisions || parsed.division, otherAlloc.divisions || otherAlloc.division);
+                if (collision.hasConflict) {
+                  return res.status(409).json({
+                    error: `Subject '${subjectName}' on ${collision.collidingDivision} is already assigned to ${other.fullName} (${other.designation}). You can assign this subject to a different division (e.g., Div B, Div C).`,
+                    conflictSubject: parsed.subjectId,
+                    conflictDivision: collision.collidingDivision,
+                    conflictFaculty: {
+                      id: other.id,
+                      name: other.fullName,
+                      designation: other.designation,
+                    },
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
       const facultyList = await getAllFaculty();
       const newFac: Faculty = {
         id: req.body.id || `fac-${Date.now()}`,
@@ -476,7 +566,7 @@ async function startServer() {
       const { id } = req.params;
       const { allocatedSubjects } = req.body;
 
-      // Server-side check: prevent assigning a subject if it is already exclusively assigned to another faculty
+      // Division-aware collision check: Allow different faculty to teach the same subject on different divisions
       if (Array.isArray(allocatedSubjects) && allocatedSubjects.length > 0) {
         const [allFaculty, allSubjects] = await Promise.all([
           getAllFaculty(),
@@ -485,33 +575,34 @@ async function startServer() {
 
         const otherFaculty = allFaculty.filter((f) => f.id !== id && f.facultyId !== id);
 
-        for (const subIdentifier of allocatedSubjects) {
-          // Find matching subject details
-          const matchedSubject = allSubjects.find((s) => s.id === subIdentifier || s.code === subIdentifier);
-          const subjectName = matchedSubject ? `${matchedSubject.name} (${matchedSubject.code})` : subIdentifier;
+        for (const rawAlloc of allocatedSubjects) {
+          const parsed = parseAllocationItem(rawAlloc);
+          const matchedSubject = allSubjects.find((s) => s.id === parsed.subjectId || s.code === parsed.subjectId);
+          const subjectName = matchedSubject ? `${matchedSubject.name} (${matchedSubject.code})` : parsed.subjectId;
 
-          // Check if another faculty already has this subject in their allocatedSubjects
-          const conflictingFaculty = otherFaculty.find((f) => {
-            const facAllocations = f.allocatedSubjects || [];
-            return facAllocations.includes(subIdentifier) || (matchedSubject && facAllocations.includes(matchedSubject.code)) || (matchedSubject && facAllocations.includes(matchedSubject.id));
-          });
+          for (const other of otherFaculty) {
+            const otherAllocations = (other.allocatedSubjects || []).map(parseAllocationItem);
+            for (const otherAlloc of otherAllocations) {
+              const matchesSub =
+                otherAlloc.subjectId === parsed.subjectId ||
+                (matchedSubject && (otherAlloc.subjectId === matchedSubject.id || otherAlloc.subjectId === matchedSubject.code));
 
-          // Also check if assignedFacultyId in subjects table is set to another faculty
-          const hasExclusiveSubjectAssignment = matchedSubject && matchedSubject.assignedFacultyId && matchedSubject.assignedFacultyId !== id;
-          const assignedFacFromTable = hasExclusiveSubjectAssignment ? allFaculty.find(f => f.id === matchedSubject.assignedFacultyId || f.facultyId === matchedSubject.assignedFacultyId) : null;
-
-          const activeConflictFaculty = conflictingFaculty || assignedFacFromTable;
-
-          if (activeConflictFaculty && activeConflictFaculty.id !== id && activeConflictFaculty.facultyId !== id) {
-            return res.status(409).json({
-              error: `Subject '${subjectName}' is already exclusively assigned to ${activeConflictFaculty.fullName} (${activeConflictFaculty.designation}). Please reassign or de-allocate it from their profile first.`,
-              conflictSubject: subIdentifier,
-              conflictFaculty: {
-                id: activeConflictFaculty.id,
-                name: activeConflictFaculty.fullName,
-                designation: activeConflictFaculty.designation,
-              },
-            });
+              if (matchesSub) {
+                const collision = checkDivisionCollision(parsed.divisions || parsed.division, otherAlloc.divisions || otherAlloc.division);
+                if (collision.hasConflict) {
+                  return res.status(409).json({
+                    error: `Subject '${subjectName}' on ${collision.collidingDivision} is already assigned to ${other.fullName} (${other.designation}). You can assign this subject to a different division (e.g., Div B, Div C).`,
+                    conflictSubject: parsed.subjectId,
+                    conflictDivision: collision.collidingDivision,
+                    conflictFaculty: {
+                      id: other.id,
+                      name: other.fullName,
+                      designation: other.designation,
+                    },
+                  });
+                }
+              }
+            }
           }
         }
       }

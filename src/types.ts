@@ -307,6 +307,12 @@ export interface ChatConversation {
   unreadCount: number;
 }
 
+export interface SubjectDivisionAllocation {
+  subjectId: string;
+  division: string; // 'Div A' | 'Div B' | 'Div C' | 'ALL' | 'All Divisions'
+  divisions?: string[]; // e.g. ['Div A'], or ['Div A', 'Div B'], or ['ALL']
+}
+
 export interface FacultySubjectAllocation {
   id: string;
   code: string;
@@ -314,6 +320,8 @@ export interface FacultySubjectAllocation {
   semester: number;
   credits: number;
   type: string;
+  division?: string; // 'Div A' | 'Div B' | 'Div C' | 'ALL' | 'All Divisions'
+  divisions?: string[];
   courseCode?: string;
   courseName?: string;
   departmentId?: string;
@@ -331,7 +339,7 @@ export interface Faculty {
   qualification: string;
   experienceYears: number;
   photo: string;
-  allocatedSubjects: string[];
+  allocatedSubjects: (string | SubjectDivisionAllocation)[];
   currentAllocations?: FacultySubjectAllocation[];
   isClassTeacherOf?: {
     departmentId: string;

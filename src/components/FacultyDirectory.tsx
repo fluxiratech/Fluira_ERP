@@ -1,18 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import { Faculty, Department, Role, Course, Program, ClassTeacherAssignment } from '../types';
-import { UserCog, Mail, Phone, BookOpen, Clock, Building2, Plus, Edit2, Trash2, Search, X, Printer, FileSpreadsheet, FileText, Download, UserCheck, Upload, User } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Faculty, Department, Role, Course, Program, ClassTeacherAssignment, Subject, FacultySubjectAllocation } from '../types';
+import {
+  UserCog,
+  Mail,
+  BookOpen,
+  Clock,
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  X,
+  Printer,
+  FileSpreadsheet,
+  FileText,
+  Download,
+  UserCheck,
+  Upload,
+  User,
+  AlertTriangle,
+  CheckCircle2,
+  Layers,
+  GraduationCap,
+  Sparkles,
+} from 'lucide-react';
 import { exportReportToPDF, exportReportToExcel, exportReportToCSV } from '../utils/reportExporter';
 import { convertFileToJPGDataUrl } from '../utils/imageUtils';
 import { ExportReportModal } from './ExportReportModal';
 import { ClassTeacherAssignModal } from './ClassTeacherAssignModal';
 import { BulkUploadModule } from './BulkUploadModule';
 
+interface AllocationItem {
+  subjectId: string;
+  division: string; // 'All Divisions' | 'Div A' | 'Div B' | 'Div C'
+}
+
 interface FacultyDirectoryProps {
   facultyList: Faculty[];
   departments: Department[];
   courses?: Course[];
   programs?: Program[];
-  subjects?: import('../types').Subject[];
+  subjects?: Subject[];
   classTeacherAssignments?: ClassTeacherAssignment[];
   userRole?: Role;
   userName?: string;
@@ -22,6 +49,59 @@ interface FacultyDirectoryProps {
   onAddFaculty?: (fac: Faculty) => void;
   onUpdateFaculty?: (id: string, updated: Partial<Faculty>) => void;
   onDeleteFaculty?: (id: string) => void;
+}
+
+// Helpers for division parsing and conflict detection
+function parseAllocItem(item: any): AllocationItem {
+  if (!item) return { subjectId: '', division: 'All Divisions' };
+  if (typeof item === 'object') {
+    return {
+      subjectId: item.subjectId || item.id || '',
+      division: item.division || (item.divisions ? item.divisions.join(', ') : 'All Divisions'),
+    };
+  }
+  if (typeof item === 'string') {
+    if (item.includes('::')) {
+      const [id, div] = item.split('::');
+      return { subjectId: id.trim(), division: div.trim() };
+    }
+    if (item.includes('#')) {
+      const [id, div] = item.split('#');
+      return { subjectId: id.trim(), division: div.trim() };
+    }
+    return { subjectId: item.trim(), division: 'All Divisions' };
+  }
+  return { subjectId: String(item), division: 'All Divisions' };
+}
+
+function normalizeDiv(div: string): string[] {
+  const trimmed = (div || '').trim().toUpperCase();
+  if (trimmed.includes('ALL') || trimmed === '' || trimmed === 'ALL DIVISIONS') {
+    return ['ALL'];
+  }
+  const match = trimmed.match(/(?:DIV(?:ISION)?\s*)?([A-Z0-9]+)/);
+  return match && match[1] ? [match[1]] : [trimmed];
+}
+
+function checkDivCollision(div1: string, div2: string): { isConflict: boolean; collidingLabel: string } {
+  const norm1 = normalizeDiv(div1);
+  const norm2 = normalizeDiv(div2);
+
+  if (norm1.includes('ALL') && norm2.includes('ALL')) {
+    return { isConflict: true, collidingLabel: 'All Divisions' };
+  }
+  if (norm1.includes('ALL')) {
+    return { isConflict: true, collidingLabel: `Division ${norm2.join(', ')}` };
+  }
+  if (norm2.includes('ALL')) {
+    return { isConflict: true, collidingLabel: `Division ${norm1.join(', ')}` };
+  }
+  for (const d of norm1) {
+    if (norm2.includes(d)) {
+      return { isConflict: true, collidingLabel: `Division ${d}` };
+    }
+  }
+  return { isConflict: false, collidingLabel: '' };
 }
 
 export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
@@ -65,32 +145,178 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   const [mobile, setMobile] = useState('9876543210');
   const [weeklyWorkloadHours, setWeeklyWorkloadHours] = useState(16);
   const [photo, setPhoto] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
-  const [allocatedSubjects, setAllocatedSubjects] = useState<string[]>([]);
+  const [allocatedSubjects, setAllocatedSubjects] = useState<AllocationItem[]>([]);
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState('');
+  const [selectedSubjectToAdd, setSelectedSubjectToAdd] = useState('');
+  const [selectedDivisionToAdd, setSelectedDivisionToAdd] = useState('All Divisions');
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  const canEdit = userRole === 'Admin' || userRole === 'HOD';
+  const canEdit = userRole === 'Admin' || userRole === 'HOD' || userRole === 'Class Teacher';
+
+  // List of other faculty allocations to detect collisions and parallel division mappings
+  const otherFacultyAllocationsList = useMemo(() => {
+    const list: {
+      facultyId: string;
+      facultyName: string;
+      designation: string;
+      subjectId: string;
+      division: string;
+    }[] = [];
+
+    const currentEditId = editingFaculty?.id;
+
+    facList.forEach((f) => {
+      if (f.id === currentEditId || f.facultyId === currentEditId) return;
+
+      const rawAllocs = f.allocatedSubjects || [];
+      rawAllocs.forEach((raw) => {
+        const parsed = parseAllocItem(raw);
+        if (parsed.subjectId) {
+          list.push({
+            facultyId: f.id,
+            facultyName: f.fullName,
+            designation: f.designation,
+            subjectId: parsed.subjectId,
+            division: parsed.division || 'All Divisions',
+          });
+        }
+      });
+
+      // Also register from currentAllocations if available
+      if (f.currentAllocations) {
+        f.currentAllocations.forEach((ca) => {
+          list.push({
+            facultyId: f.id,
+            facultyName: f.fullName,
+            designation: f.designation,
+            subjectId: ca.id,
+            division: ca.division || 'All Divisions',
+          });
+          list.push({
+            facultyId: f.id,
+            facultyName: f.fullName,
+            designation: f.designation,
+            subjectId: ca.code,
+            division: ca.division || 'All Divisions',
+          });
+        });
+      }
+    });
+
+    return list;
+  }, [facList, editingFaculty]);
+
+  // Helper to query other allocations for a given subject
+  const getOtherAllocationsForSubject = (subId: string, subCode?: string) => {
+    return otherFacultyAllocationsList.filter(
+      (a) => a.subjectId === subId || (subCode && a.subjectId === subCode)
+    );
+  };
+
+  // Check if a specific target allocation has a division conflict
+  const checkAllocationConflict = (subId: string, division: string, subCode?: string) => {
+    const others = getOtherAllocationsForSubject(subId, subCode);
+    for (const other of others) {
+      const collision = checkDivCollision(division, other.division);
+      if (collision.isConflict) {
+        return {
+          hasConflict: true,
+          collidingDivision: collision.collidingLabel,
+          facultyName: other.facultyName,
+          facultyDesignation: other.designation,
+          otherDivision: other.division,
+        };
+      }
+    }
+    return null;
+  };
+
+  // Find all active division conflicts in the currently edited allocations list
+  const activeConflicts = useMemo(() => {
+    const conflicts: {
+      subject: Subject | { id: string; code: string; name: string };
+      targetDivision: string;
+      conflictFacultyName: string;
+      conflictDesignation: string;
+      collidingDivision: string;
+    }[] = [];
+
+    allocatedSubjects.forEach((item) => {
+      const subObj =
+        subjects.find((s) => s.id === item.subjectId || s.code === item.subjectId) || {
+          id: item.subjectId,
+          code: item.subjectId,
+          name: item.subjectId,
+        };
+      const conflict = checkAllocationConflict(item.subjectId, item.division, (subObj as any).code);
+      if (conflict) {
+        conflicts.push({
+          subject: subObj,
+          targetDivision: item.division,
+          conflictFacultyName: conflict.facultyName,
+          conflictDesignation: conflict.facultyDesignation,
+          collidingDivision: conflict.collidingDivision,
+        });
+      }
+    });
+
+    return conflicts;
+  }, [allocatedSubjects, subjects, otherFacultyAllocationsList]);
 
   const filtered = facList.filter((f) => {
     const matchesDept = selectedDept === 'ALL' || f.departmentId === selectedDept;
     const matchesSearch =
       f.fullName.toLowerCase().includes(search.toLowerCase()) ||
       f.departmentName.toLowerCase().includes(search.toLowerCase()) ||
-      f.designation.toLowerCase().includes(search.toLowerCase());
+      f.designation.toLowerCase().includes(search.toLowerCase()) ||
+      (f.currentAllocations &&
+        f.currentAllocations.some(
+          (ca) =>
+            ca.name.toLowerCase().includes(search.toLowerCase()) ||
+            ca.code.toLowerCase().includes(search.toLowerCase()) ||
+            (ca.division && ca.division.toLowerCase().includes(search.toLowerCase()))
+        ));
     return matchesDept && matchesSearch;
   });
 
-  const exportHeaders = ['Faculty Name', 'Designation', 'Department', 'Qualification', 'Experience', 'Weekly Workload', 'Email', 'Mobile'];
-  const exportRows = filtered.map((f) => [
-    f.fullName,
-    f.designation,
-    f.departmentName,
-    f.qualification,
-    `${f.experienceYears} Years`,
-    `${f.weeklyWorkloadHours} Hours/Week`,
-    f.email,
-    f.mobile,
-  ]);
+  const exportHeaders = [
+    'Faculty Name',
+    'Designation',
+    'Department',
+    'Current Allocations & Divisions',
+    'Qualification',
+    'Experience',
+    'Weekly Workload',
+    'Email',
+    'Mobile',
+  ];
+  const exportRows = filtered.map((f) => {
+    const allocSummary =
+      f.currentAllocations && f.currentAllocations.length > 0
+        ? f.currentAllocations
+            .map((a) => `${a.name} (${a.code}) [${a.division || 'All Divisions'}]`)
+            .join('; ')
+        : (f.allocatedSubjects || [])
+            .map((raw) => {
+              const p = parseAllocItem(raw);
+              return `${p.subjectId} [${p.division}]`;
+            })
+            .join('; ') || 'None';
+
+    return [
+      f.fullName,
+      f.designation,
+      f.departmentName,
+      allocSummary,
+      f.qualification,
+      `${f.experienceYears} Years`,
+      `${f.weeklyWorkloadHours} Hours/Week`,
+      f.email,
+      f.mobile,
+    ];
+  });
 
   const reportMetadata = {
     program: selectedDept === 'ALL' ? 'Department of Accounting & Finance' : selectedDept,
@@ -98,7 +324,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     academicYear: 'AY 2025-26',
     semester: 'All Semesters',
     division: 'Div A / B / C',
-    subject: 'All Workloads',
+    subject: 'All Workloads & Division Allocations',
     generatedBy: 'Principal / HOD Office',
   };
 
@@ -114,6 +340,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     setWeeklyWorkloadHours(16);
     setPhoto('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
     setAllocatedSubjects([]);
+    setSubjectSearchQuery('');
+    setSelectedSubjectToAdd('');
+    setSelectedDivisionToAdd('All Divisions');
+    setServerError(null);
     setShowModal(true);
   };
 
@@ -128,7 +358,31 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     setMobile(fac.mobile);
     setWeeklyWorkloadHours(fac.weeklyWorkloadHours);
     setPhoto(fac.photo);
-    setAllocatedSubjects(fac.allocatedSubjects || []);
+
+    // Populate allocated subjects with division metadata
+    const itemsMap = new Map<string, AllocationItem>();
+
+    if (fac.currentAllocations && fac.currentAllocations.length > 0) {
+      fac.currentAllocations.forEach((ca) => {
+        itemsMap.set(ca.id, {
+          subjectId: ca.id,
+          division: ca.division || 'All Divisions',
+        });
+      });
+    }
+
+    (fac.allocatedSubjects || []).forEach((raw) => {
+      const parsed = parseAllocItem(raw);
+      if (parsed.subjectId && !itemsMap.has(parsed.subjectId)) {
+        itemsMap.set(parsed.subjectId, parsed);
+      }
+    });
+
+    setAllocatedSubjects(Array.from(itemsMap.values()));
+    setSubjectSearchQuery('');
+    setSelectedSubjectToAdd('');
+    setSelectedDivisionToAdd('All Divisions');
+    setServerError(null);
     setShowModal(true);
   };
 
@@ -139,16 +393,85 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     }
   };
 
-  const toggleSubjectAllocation = (subId: string) => {
+  const toggleSubjectAllocation = (subId: string, defaultDiv: string = 'All Divisions') => {
+    setServerError(null);
+    setAllocatedSubjects((prev) => {
+      const exists = prev.some((item) => item.subjectId === subId);
+      if (exists) {
+        return prev.filter((item) => item.subjectId !== subId);
+      } else {
+        return [...prev, { subjectId: subId, division: defaultDiv }];
+      }
+    });
+  };
+
+  const updateSubjectDivision = (subId: string, newDivision: string) => {
+    setServerError(null);
     setAllocatedSubjects((prev) =>
-      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, subId]
+      prev.map((item) =>
+        item.subjectId === subId ? { ...item, division: newDivision } : item
+      )
     );
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleAddSelectedSubject = () => {
+    if (!selectedSubjectToAdd) return;
+    setServerError(null);
+    setAllocatedSubjects((prev) => {
+      const exists = prev.some((item) => item.subjectId === selectedSubjectToAdd);
+      if (exists) {
+        return prev.map((item) =>
+          item.subjectId === selectedSubjectToAdd
+            ? { ...item, division: selectedDivisionToAdd }
+            : item
+        );
+      } else {
+        return [...prev, { subjectId: selectedSubjectToAdd, division: selectedDivisionToAdd }];
+      }
+    });
+    setSelectedSubjectToAdd('');
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError(null);
+
+    // Prevent submission if there are active division collisions
+    if (activeConflicts.length > 0) {
+      const first = activeConflicts[0];
+      setServerError(
+        `Division Collision: '${first.subject.name}' on ${first.collidingDivision} is already assigned to ${first.conflictFacultyName}. You can assign it to a different division (e.g. Div B or Div C) or adjust the existing assignment.`
+      );
+      return;
+    }
+
     const deptObj = departments.find((d) => d.id === departmentId);
-    const deptName = deptObj?.name || 'Computer Science';
+    const deptName = deptObj?.name || 'Department of Accounting & Finance';
+
+    // Calculate populated joined subject allocations with division mapping
+    const currentAllocationsData: FacultySubjectAllocation[] = allocatedSubjects
+      .map((item) => {
+        const s = subjects.find((sub) => sub.id === item.subjectId || sub.code === item.subjectId);
+        if (!s) return null;
+        return {
+          id: s.id,
+          code: s.code,
+          name: s.name,
+          semester: s.semester,
+          credits: s.credits,
+          type: s.type,
+          division: item.division || 'All Divisions',
+          divisions: [item.division || 'All Divisions'],
+          courseCode: s.courseCode,
+          departmentId: s.departmentId,
+        };
+      })
+      .filter(Boolean) as FacultySubjectAllocation[];
+
+    // Save formatted subject allocations string list or objects
+    const formattedAllocatedSubjects = allocatedSubjects.map(
+      (item) => `${item.subjectId}::${item.division || 'All Divisions'}`
+    );
 
     if (editingFaculty) {
       const updatedFac: Faculty = {
@@ -163,12 +486,32 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         mobile,
         weeklyWorkloadHours: Number(weeklyWorkloadHours),
         photo,
-        allocatedSubjects: allocatedSubjects.length > 0 ? allocatedSubjects : editingFaculty.allocatedSubjects,
+        allocatedSubjects: formattedAllocatedSubjects,
+        currentAllocations: currentAllocationsData,
       };
-      setFacList((prev) =>
-        prev.map((f) => (f.id === editingFaculty.id ? updatedFac : f))
-      );
-      if (onUpdateFaculty) onUpdateFaculty(editingFaculty.id, updatedFac);
+
+      try {
+        const response = await fetch(`/api/faculty/${editingFaculty.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedFac),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          setServerError(errData.error || 'Failed to update faculty allocations on server.');
+          return;
+        }
+
+        const serverUpdated = await response.json();
+        setFacList((prev) =>
+          prev.map((f) => (f.id === editingFaculty.id ? (serverUpdated.id ? serverUpdated : updatedFac) : f))
+        );
+        if (onUpdateFaculty) onUpdateFaculty(editingFaculty.id, serverUpdated || updatedFac);
+        setShowModal(false);
+      } catch (err: any) {
+        setServerError(err.message || 'Network error updating faculty record.');
+      }
     } else {
       const newFac: Faculty = {
         id: `fac-${Date.now()}`,
@@ -183,14 +526,46 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         mobile,
         weeklyWorkloadHours: Number(weeklyWorkloadHours),
         photo: photo || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
-        allocatedSubjects: allocatedSubjects.length > 0 ? allocatedSubjects : ['sub-af301'],
+        allocatedSubjects: formattedAllocatedSubjects,
+        currentAllocations: currentAllocationsData,
         isActive: true,
       };
-      setFacList((prev) => [...prev, newFac]);
-      if (onAddFaculty) onAddFaculty(newFac);
+
+      try {
+        const response = await fetch('/api/faculty', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newFac),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          setServerError(errData.error || 'Failed to create faculty member on server.');
+          return;
+        }
+
+        const serverCreated = await response.json();
+        setFacList((prev) => [...prev, serverCreated || newFac]);
+        if (onAddFaculty) onAddFaculty(serverCreated || newFac);
+        setShowModal(false);
+      } catch (err: any) {
+        setServerError(err.message || 'Network error creating faculty record.');
+      }
     }
-    setShowModal(false);
   };
+
+  // Filtered available subjects for dropdown and search
+  const filteredAvailableSubjects = useMemo(() => {
+    return subjects.filter((s) => {
+      const q = subjectSearchQuery.toLowerCase().trim();
+      if (!q) return true;
+      return (
+        s.name.toLowerCase().includes(q) ||
+        s.code.toLowerCase().includes(q) ||
+        (s.courseCode && s.courseCode.toLowerCase().includes(q))
+      );
+    });
+  }, [subjects, subjectSearchQuery]);
 
   return (
     <div className="space-y-6">
@@ -202,27 +577,48 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
             <h1 className="text-xl font-bold text-slate-900">Faculty & Academic Staff Directory</h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Department allocation, subject workloads, designations, and academic profiles.
+            Division-aware subject allocations, parallel division faculty mapping (e.g. Prof A on Div A, Prof B on Div B), designations, and workload analytics.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => exportReportToPDF({ title: 'OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT', metadata: reportMetadata, headers: exportHeaders, rows: exportRows })}
+            onClick={() =>
+              exportReportToPDF({
+                title: 'OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT',
+                metadata: reportMetadata,
+                headers: exportHeaders,
+                rows: exportRows,
+              })
+            }
             className="flex items-center space-x-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>PDF</span>
           </button>
           <button
-            onClick={() => exportReportToExcel({ title: 'OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT', metadata: reportMetadata, headers: exportHeaders, rows: exportRows })}
+            onClick={() =>
+              exportReportToExcel({
+                title: 'OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT',
+                metadata: reportMetadata,
+                headers: exportHeaders,
+                rows: exportRows,
+              })
+            }
             className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Excel</span>
           </button>
           <button
-            onClick={() => exportReportToCSV({ title: 'OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT', metadata: reportMetadata, headers: exportHeaders, rows: exportRows })}
+            onClick={() =>
+              exportReportToCSV({
+                title: 'OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT',
+                metadata: reportMetadata,
+                headers: exportHeaders,
+                rows: exportRows,
+              })
+            }
             className="flex items-center space-x-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition"
           >
             <FileText className="w-3.5 h-3.5" />
@@ -269,10 +665,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
           <Search className="w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search faculty by name, designation, or department..."
+            placeholder="Search faculty by name, designation, subject, division, or department..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 p-2 rounded-xl focus:outline-none"
+            className="w-full bg-slate-50 border border-slate-200 p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
 
@@ -281,11 +677,11 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
           <select
             value={selectedDept}
             onChange={(e) => setSelectedDept(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
+            className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800 focus:outline-none"
           >
             <option value="ALL">All Departments</option>
-            <option value="Accounting & Finance">Accounting & Finance</option>
-            <option value="Business Analytics">Business Analytics</option>
+            <option value="dept-af">Department of Accounting & Finance</option>
+            <option value="dept-ba">Department of Business Analytics</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -297,96 +693,145 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
       {/* Faculty Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((fac) => (
-          <div key={fac.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 flex flex-col justify-between">
-            <div className="space-y-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={fac.photo}
-                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-100 shadow-sm"
-                    alt=""
-                  />
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">{fac.fullName}</h3>
-                    <p className="text-xs font-semibold text-indigo-600">{fac.designation}</p>
-                    <p className="text-[11px] text-slate-500">{fac.departmentName}</p>
-                  </div>
-                </div>
+        {filtered.map((fac) => {
+          // Resolve current allocations with division metadata
+          const displayedAllocations: FacultySubjectAllocation[] =
+            fac.currentAllocations && fac.currentAllocations.length > 0
+              ? fac.currentAllocations
+              : (fac.allocatedSubjects || []).map((raw) => {
+                  const p = parseAllocItem(raw);
+                  const s = subjects.find((sub) => sub.id === p.subjectId || sub.code === p.subjectId);
+                  return {
+                    id: p.subjectId,
+                    code: s ? s.code : p.subjectId,
+                    name: s ? s.name : p.subjectId,
+                    semester: s ? s.semester : 0,
+                    credits: s ? s.credits : 0,
+                    type: s ? s.type : 'Theory',
+                    division: p.division || 'All Divisions',
+                    courseCode: s ? s.courseCode : undefined,
+                  };
+                });
 
-                {canEdit && (
-                  <div className="flex space-x-1 shrink-0">
-                    <button
-                      onClick={() => handleOpenEdit(fac)}
-                      className="p-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-600 rounded-lg transition"
-                      title="Edit Faculty"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(fac.id)}
-                      className="p-1.5 bg-slate-100 hover:bg-rose-50 text-rose-600 rounded-lg transition"
-                      title="Delete Faculty"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                <p className="flex items-center space-x-2">
-                  <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>
-                    Qualification: <strong>{fac.qualification}</strong>
-                  </span>
-                </p>
-                <p className="flex items-center space-x-2">
-                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>
-                    Experience: <strong>{fac.experienceYears} Years</strong>
-                  </span>
-                </p>
-                <p className="flex items-center space-x-2">
-                  <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="truncate">{fac.email}</span>
-                </p>
-
-                {/* Allocated Subjects Badge Section */}
-                <div className="pt-2 border-t border-slate-100">
-                  <span className="text-[11px] font-bold text-slate-700 block mb-1.5 flex items-center space-x-1">
-                    <BookOpen className="w-3 h-3 text-indigo-600" />
-                    <span>Allocated Subjects ({fac.allocatedSubjects?.length || 0}):</span>
-                  </span>
-                  {fac.allocatedSubjects && fac.allocatedSubjects.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {fac.allocatedSubjects.map((subId) => {
-                        const matchedSub = subjects.find((s) => s.id === subId || s.code === subId);
-                        const label = matchedSub ? `${matchedSub.name} (${matchedSub.code})` : subId;
-                        return (
-                          <span
-                            key={subId}
-                            className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-[10px] font-medium text-indigo-700 max-w-[200px] truncate"
-                            title={label}
-                          >
-                            {label}
-                          </span>
-                        );
-                      })}
+          return (
+            <div
+              key={fac.id}
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4 flex flex-col justify-between hover:shadow-md transition duration-200"
+            >
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-3">
+                    <img
+                      src={fac.photo}
+                      className="w-14 h-14 rounded-2xl object-cover ring-2 ring-indigo-100 shadow-sm"
+                      alt=""
+                    />
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <h3 className="text-sm font-bold text-slate-900">{fac.fullName}</h3>
+                      </div>
+                      <p className="text-xs font-semibold text-indigo-600">{fac.designation}</p>
+                      <p className="text-[11px] text-slate-500">{fac.departmentName}</p>
                     </div>
-                  ) : (
-                    <span className="text-[11px] text-slate-400 italic">No subjects currently allocated.</span>
+                  </div>
+
+                  {canEdit && (
+                    <div className="flex space-x-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEdit(fac)}
+                        className="p-1.5 bg-slate-100 hover:bg-indigo-50 text-indigo-600 rounded-lg transition"
+                        title="Edit Faculty & Division Allocations"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(fac.id)}
+                        className="p-1.5 bg-slate-100 hover:bg-rose-50 text-rose-600 rounded-lg transition"
+                        title="Delete Faculty"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   )}
                 </div>
+
+                <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
+                  <p className="flex items-center space-x-2">
+                    <BookOpen className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>
+                      Qualification: <strong>{fac.qualification}</strong>
+                    </span>
+                  </p>
+                  <p className="flex items-center space-x-2">
+                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>
+                      Experience: <strong>{fac.experienceYears} Years</strong>
+                    </span>
+                  </p>
+                  <p className="flex items-center space-x-2">
+                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="truncate">{fac.email}</span>
+                  </p>
+
+                  {/* Current Allocations Tag & Detailed Badges with Division Pill */}
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-800 flex items-center space-x-1">
+                        <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Current Allocations</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-[10px] font-bold text-indigo-700">
+                        {displayedAllocations.length} {displayedAllocations.length === 1 ? 'Subject' : 'Subjects'}
+                      </span>
+                    </div>
+
+                    {displayedAllocations.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {displayedAllocations.map((alloc, idx) => {
+                          const divLabel = alloc.division || 'All Divisions';
+                          const isSpecificDiv = divLabel !== 'All Divisions' && divLabel !== 'ALL';
+
+                          return (
+                            <div
+                              key={`${alloc.id}-${idx}`}
+                              className="group relative inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-[11px] text-slate-700 transition shadow-xs max-w-full"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                              <span className="font-semibold text-slate-800 truncate" title={alloc.name}>
+                                {alloc.name}
+                              </span>
+                              <span className="font-mono text-[10px] px-1 py-0.2 rounded bg-white border border-slate-200 text-slate-500 font-bold shrink-0">
+                                {alloc.code}
+                              </span>
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                                  isSpecificDiv
+                                    ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                    : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                }`}
+                              >
+                                {divLabel}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic bg-slate-50 p-2 rounded-lg border border-dashed border-slate-200 text-center">
+                        No subjects currently linked.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs flex justify-between items-center">
+                <span className="font-semibold text-slate-700">Weekly Workload:</span>
+                <span className="font-bold text-indigo-600">{fac.weeklyWorkloadHours} Hours / Week</span>
               </div>
             </div>
-
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs flex justify-between items-center">
-              <span className="font-semibold text-slate-700">Weekly Workload:</span>
-              <span className="font-bold text-indigo-600">{fac.weeklyWorkloadHours} Hours / Week</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         {filtered.length === 0 && (
           <div className="col-span-full bg-white rounded-2xl p-8 border text-center text-slate-400">
@@ -395,20 +840,59 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
         )}
       </div>
 
-      {/* Add / Edit Faculty Modal */}
+      {/* Add / Edit Faculty Modal with Division Selectors & Parallel Division Support */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="text-sm font-bold text-slate-800">
-                {editingFaculty ? 'Edit Faculty Record' : 'Add New Faculty Member'}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+              <div className="flex items-center space-x-2">
+                <GraduationCap className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-800">
+                  {editingFaculty ? `Edit Faculty: ${editingFaculty.fullName}` : 'Add New Faculty Member'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-3 text-xs font-medium">
+            {/* Visual Error / Warning Banner */}
+            {serverError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Allocation Error:</span>
+                  <span>{serverError}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Active conflicts warning before submit */}
+            {activeConflicts.length > 0 && !serverError && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Warning: Division Collision Detected</span>
+                  <ul className="mt-1 list-disc list-inside space-y-0.5">
+                    {activeConflicts.map((c, i) => (
+                      <li key={i}>
+                        <strong>{c.subject.name} ({c.subject.code})</strong> on{' '}
+                        <strong className="text-amber-800">{c.collidingDivision}</strong> is already assigned to{' '}
+                        <strong>{c.conflictFacultyName}</strong> ({c.conflictDesignation}).
+                      </li>
+                    ))}
+                  </ul>
+                  <span className="text-[11px] text-amber-700 mt-1.5 block font-medium">
+                    💡 <strong>Tip:</strong> If multiple teachers handle this subject, change the Division to a different batch (e.g. <strong>Div B</strong> or <strong>Div C</strong>) to allow parallel division teaching!
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSave} className="space-y-4 text-xs font-medium">
               <div>
                 <label className="text-slate-700 block mb-1 font-bold">Full Name</label>
                 <input
@@ -417,7 +901,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Dr. Rajesh Verma"
-                  className="w-full bg-slate-50 border p-2 rounded-lg"
+                  className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 />
               </div>
 
@@ -427,7 +911,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   <select
                     value={designation}
                     onChange={(e) => setDesignation(e.target.value)}
-                    className="w-full bg-slate-50 border p-2 rounded-lg"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold text-slate-800"
                   >
                     {userRole === 'Admin' && (
                       <option value="Professor & HOD">Professor & HOD (Head of Department)</option>
@@ -442,7 +926,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   <select
                     value={departmentId}
                     onChange={(e) => setDepartmentId(e.target.value)}
-                    className="w-full bg-slate-50 border p-2 rounded-lg"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold text-slate-800"
                   >
                     {departments.map((d) => (
                       <option key={d.id} value={d.id}>
@@ -462,7 +946,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     value={qualification}
                     onChange={(e) => setQualification(e.target.value)}
                     placeholder="e.g. Ph.D. Data Science"
-                    className="w-full bg-slate-50 border p-2 rounded-lg"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -470,9 +954,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   <input
                     type="number"
                     required
+                    min={0}
                     value={experienceYears}
                     onChange={(e) => setExperienceYears(Number(e.target.value))}
-                    className="w-full bg-slate-50 border p-2 rounded-lg"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -486,7 +971,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="faculty@apextech.edu"
-                    className="w-full bg-slate-50 border p-2 rounded-lg"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -494,52 +979,248 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   <input
                     type="number"
                     required
+                    min={1}
                     value={weeklyWorkloadHours}
                     onChange={(e) => setWeeklyWorkloadHours(Number(e.target.value))}
-                    className="w-full bg-slate-50 border p-2 rounded-lg"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-slate-700 block mb-1 font-bold">
-                  Allocated Subjects ({allocatedSubjects.length} selected)
-                </label>
-                <p className="text-[11px] text-slate-500 mb-2">
-                  Select the subjects taught by this faculty member for timetable mapping and attendance tracking.
-                </p>
-                <div className="max-h-36 overflow-y-auto p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
-                  {subjects.length > 0 ? (
-                    subjects.map((sub) => {
-                      const isSelected = allocatedSubjects.includes(sub.id);
-                      return (
-                        <div
-                          key={sub.id}
-                          onClick={() => toggleSubjectAllocation(sub.id)}
-                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition text-xs border ${
-                            isSelected
-                              ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-semibold'
-                              : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
-                            />
-                            <span>{sub.name}</span>
+              {/* Enhanced Division-Aware Multi-Select / Search-and-Add Interface */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-slate-800 font-bold block flex items-center space-x-1.5">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <span>Subject Allocations with Division Mapping ({allocatedSubjects.length} Assigned)</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Allocate subjects with division-level precision. Different faculty can be assigned to different divisions of the same subject.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Add with Division Selector */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
+                  <div className="sm:col-span-6">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      1. Select Subject:
+                    </label>
+                    <select
+                      value={selectedSubjectToAdd}
+                      onChange={(e) => setSelectedSubjectToAdd(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 p-2 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value="">-- Choose Subject --</option>
+                      {subjects.map((sub) => {
+                        const existingAllocs = getOtherAllocationsForSubject(sub.id, sub.code);
+                        const isAlreadySelected = allocatedSubjects.some((a) => a.subjectId === sub.id);
+                        const facSummary =
+                          existingAllocs.length > 0
+                            ? existingAllocs.map((a) => `${a.facultyName} (${a.division})`).join(', ')
+                            : 'Unassigned';
+
+                        return (
+                          <option key={sub.id} value={sub.id}>
+                            {sub.name} ({sub.code}) • Sem {sub.semester} [{facSummary}] {isAlreadySelected ? '✓' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-4">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                      2. Target Division:
+                    </label>
+                    <select
+                      value={selectedDivisionToAdd}
+                      onChange={(e) => setSelectedDivisionToAdd(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 p-2 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value="All Divisions">All Divisions (A, B, C)</option>
+                      <option value="Div A">Division A</option>
+                      <option value="Div B">Division B</option>
+                      <option value="Div C">Division C</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-2 flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleAddSelectedSubject}
+                      disabled={!selectedSubjectToAdd}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center justify-center space-x-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search in Interactive Catalog */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Filter catalog by subject title, course code, or semester..."
+                    value={subjectSearchQuery}
+                    onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                    className="w-full bg-white border border-slate-200 pl-8 pr-3 py-1.5 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Active Linked Allocations Table with Inline Division Dropdowns */}
+                {allocatedSubjects.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Active Allocations for this Faculty ({allocatedSubjects.length}):
+                    </span>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto p-2 bg-white rounded-xl border border-slate-200">
+                      {allocatedSubjects.map((item) => {
+                        const matchedSub = subjects.find((s) => s.id === item.subjectId || s.code === item.subjectId);
+                        const label = matchedSub ? matchedSub.name : item.subjectId;
+                        const code = matchedSub ? matchedSub.code : '';
+                        const sem = matchedSub ? matchedSub.semester : 0;
+                        const conflict = checkAllocationConflict(item.subjectId, item.division, code);
+                        const otherTeachers = getOtherAllocationsForSubject(item.subjectId, code);
+
+                        return (
+                          <div
+                            key={item.subjectId}
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-xl text-xs border gap-2 transition ${
+                              conflict
+                                ? 'bg-amber-50 border-amber-300 text-amber-950'
+                                : 'bg-slate-50 border-slate-200 text-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2 truncate">
+                              <span className="w-2 h-2 rounded-full bg-indigo-600 shrink-0" />
+                              <div className="truncate">
+                                <span className="font-bold text-slate-900 truncate block">{label}</span>
+                                <div className="flex items-center space-x-1.5 text-[10px] text-slate-500">
+                                  <span className="font-mono font-bold text-slate-700">{code}</span>
+                                  <span>•</span>
+                                  <span>Sem {sem}</span>
+                                  {otherTeachers.length > 0 && !conflict && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-emerald-700 font-semibold flex items-center space-x-0.5">
+                                        <Sparkles className="w-2.5 h-2.5 inline" />
+                                        <span>
+                                          Parallel: {otherTeachers.map((t) => `${t.facultyName} on ${t.division}`).join(', ')}
+                                        </span>
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2 shrink-0 self-end sm:self-auto">
+                              {conflict && (
+                                <span
+                                  className="px-2 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-bold flex items-center space-x-1"
+                                  title={`Collides with ${conflict.facultyName} on ${conflict.collidingDivision}`}
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                                  <span>Collision: {conflict.collidingDivision}</span>
+                                </span>
+                              )}
+
+                              {/* Inline Division Selector */}
+                              <select
+                                value={item.division || 'All Divisions'}
+                                onChange={(e) => updateSubjectDivision(item.subjectId, e.target.value)}
+                                className="bg-white border border-slate-300 text-[11px] font-bold text-slate-800 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                              >
+                                <option value="All Divisions">All Divisions</option>
+                                <option value="Div A">Div A</option>
+                                <option value="Div B">Div B</option>
+                                <option value="Div C">Div C</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() => toggleSubjectAllocation(item.subjectId)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-200/60 transition"
+                                title="Remove Subject"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/80 border text-slate-500">
-                            {sub.code}
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-[11px] text-slate-400 p-2 text-center">No subjects available.</p>
-                  )}
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Available Subjects Selection Catalog */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                    Available Subjects Catalog ({filteredAvailableSubjects.length}):
+                  </span>
+                  <div className="max-h-40 overflow-y-auto p-1.5 bg-white border border-slate-200 rounded-xl space-y-1.5">
+                    {filteredAvailableSubjects.length > 0 ? (
+                      filteredAvailableSubjects.map((sub) => {
+                        const isSelected = allocatedSubjects.some((a) => a.subjectId === sub.id);
+                        const otherTeachers = getOtherAllocationsForSubject(sub.id, sub.code);
+
+                        return (
+                          <div
+                            key={sub.id}
+                            onClick={() => toggleSubjectAllocation(sub.id, selectedDivisionToAdd)}
+                            className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition text-xs border ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-semibold'
+                                : 'bg-white border-slate-100 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2.5 overflow-hidden">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="rounded text-indigo-600 focus:ring-indigo-500 pointer-events-none"
+                              />
+                              <div className="truncate">
+                                <span className="block truncate">{sub.name}</span>
+                                <div className="flex items-center space-x-1 text-[10px] text-slate-500 font-normal">
+                                  <span>Sem {sub.semester}</span>
+                                  <span>•</span>
+                                  <span>{sub.credits} Credits</span>
+                                  <span>•</span>
+                                  <span>{sub.type}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-1.5 shrink-0">
+                              {otherTeachers.length > 0 ? (
+                                <span
+                                  className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-medium"
+                                  title={otherTeachers.map((t) => `${t.facultyName} on ${t.division}`).join(', ')}
+                                >
+                                  {otherTeachers.map((t) => `${t.facultyName.split(' ')[0]} (${t.division})`).join(', ')}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-emerald-600 font-medium">Unassigned</span>
+                              )}
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 border text-slate-600 font-bold">
+                                {sub.code}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-[11px] text-slate-400 p-3 text-center">
+                        No subjects match '{subjectSearchQuery}'.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -560,7 +1241,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     )}
                   </div>
                   <div className="flex-1 space-y-1">
-                    <p className="text-[11px] text-slate-500 font-medium">Select a .jpg photograph for faculty profile.</p>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Select a .jpg photograph for the faculty profile.
+                    </p>
                     <label className="cursor-pointer px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs shadow-sm transition inline-flex items-center space-x-1.5">
                       <Upload className="w-3.5 h-3.5" />
                       <span>Choose .JPG Photo File</span>
@@ -589,13 +1272,13 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm"
                 >
                   Save Faculty
                 </button>
@@ -609,29 +1292,32 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
       <ExportReportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        title="OFFICIAL FACULTY & ACADEMIC STAFF DIRECTORY REPORT"
+        title="FACULTY DIRECTORY REPORT"
         headers={exportHeaders}
         rows={exportRows}
         defaultMetadata={reportMetadata}
       />
 
-      {/* Class Teacher Assignment Console Modal */}
-      <ClassTeacherAssignModal
-        isOpen={showClassTeacherModal}
-        onClose={() => setShowClassTeacherModal(false)}
-        facultyList={facList}
-        courses={courses}
-        programs={programs}
-        classTeacherAssignments={classTeacherAssignments}
-        userRole={userRole}
-        userName={userName}
-        onAssignClassTeacher={(assignment) => {
-          if (onAssignClassTeacher) onAssignClassTeacher(assignment);
-        }}
-        onDeleteAssignment={(id) => {
-          if (onDeleteClassTeacherAssignment) onDeleteClassTeacherAssignment(id);
-        }}
-      />
+      {/* Class Teacher Assignment Modal */}
+      {showClassTeacherModal && (
+        <ClassTeacherAssignModal
+          isOpen={showClassTeacherModal}
+          onClose={() => setShowClassTeacherModal(false)}
+          facultyList={facList}
+          courses={courses}
+          programs={programs}
+          classTeacherAssignments={classTeacherAssignments}
+          userRole={userRole}
+          userName={userName}
+          onAssignClassTeacher={(assignment) => {
+            if (onAssignClassTeacher) onAssignClassTeacher(assignment);
+            setShowClassTeacherModal(false);
+          }}
+          onDeleteAssignment={(id) => {
+            if (onDeleteClassTeacherAssignment) onDeleteClassTeacherAssignment(id);
+          }}
+        />
+      )}
 
       {/* Bulk Faculty Import Modal */}
       {showBulkImportModal && (
