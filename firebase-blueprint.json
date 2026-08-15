@@ -1,0 +1,59 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "id": "string",
+        "name": "string",
+        "email": "string",
+        "role": "string",
+        "departmentId": "string?",
+        "phone": "string?",
+        "avatar": "string?",
+        "isActive": "boolean",
+        "createdAt": "string"
+      }
+    },
+    "Student": {
+      "collection": "students",
+      "fields": {
+        "id": "string",
+        "studentId": "string",
+        "fullName": "string",
+        "rollNumber": "string",
+        "departmentId": "string",
+        "programId": "string",
+        "course": "string",
+        "semester": "number",
+        "division": "string",
+        "email": "string",
+        "mobile": "string",
+        "attendancePercentage": "number"
+      }
+    },
+    "Faculty": {
+      "collection": "faculty",
+      "fields": {
+        "id": "string",
+        "facultyId": "string",
+        "fullName": "string",
+        "departmentId": "string",
+        "designation": "string",
+        "qualification": "string",
+        "experienceYears": "number",
+        "email": "string",
+        "mobile": "string"
+      }
+    },
+    "Department": {
+      "collection": "departments",
+      "fields": {
+        "id": "string",
+        "code": "string",
+        "name": "string",
+        "hodName": "string",
+        "hodEmail": "string"
+      }
+    }
+  }
+}

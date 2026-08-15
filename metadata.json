@@ -1,0 +1,6 @@
+{
+  "name": "Fluxira ERP",
+  "description": "Production-ready College Attendance ERP System featuring comprehensive RBAC (Super Admin, Admin, Principal, HOD, Faculty, Class Teacher, Student, Parent, Office Staff), Student 360° Profile with Academic/GPA tracking, Daily/Lecture/Practical Attendance Marking, Timetable & Conflict Detection, Defaulter Analytics, Leave Management with Approvals, Results/GPA Matrix, Audit Logs, and Notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
