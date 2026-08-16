@@ -63,7 +63,7 @@ export const ResultsMatrix: React.FC<ResultsMatrixProps> = ({
     const matchesProgram = selectedProgram === 'ALL' || (s.programName && s.programName.toLowerCase().includes(selectedProgram.toLowerCase())) || (s.course && s.course.toLowerCase().includes(selectedProgram.toLowerCase()));
     const matchesCourse = selectedCourse === 'ALL' || (s.course && s.course.toLowerCase().includes(selectedCourse.toLowerCase())) || (selectedCourse === 'BAF' && s.course && (s.course.includes('BAF') || s.course.includes('B.Com')));
     const matchesSem = selectedSem === 'ALL' || String(s.semester) === selectedSem;
-    const matchesDiv = selectedDiv === 'ALL' || s.division === selectedDiv;
+    const matchesDiv = selectedDiv === 'ALL' || (selectedDiv.includes('+') ? selectedDiv.split('+').map((d) => d.trim()).includes(s.division) : s.division === selectedDiv);
 
     const matchesRoll =
       searchRollNo === '' ||
@@ -318,11 +318,12 @@ export const ResultsMatrix: React.FC<ResultsMatrixProps> = ({
               className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
             >
               <option value="ALL">All Divisions</option>
-              {['A', 'B', 'C'].map((div) => (
-                <option key={div} value={div}>
-                  Division {div}
-                </option>
-              ))}
+              <option value="A">Division A</option>
+              <option value="B">Division B</option>
+              <option value="C">Division C</option>
+              <option value="A + B">Div A + Div B</option>
+              <option value="B + C">Div B + Div C</option>
+              <option value="A + C">Div A + Div C</option>
             </select>
           </div>
 

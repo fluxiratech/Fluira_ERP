@@ -854,11 +854,11 @@ export default function App() {
       courseId: s.courseId || 'course-baf',
       semester: Number(s.semester) || 1,
       credits: Number(s.credits) || 4,
-      type: (s.type as any) || 'Theory',
+      type: s.type || 'Theory',
       assignedFacultyId: s.assignedFacultyId || 'fac-1',
       assignedFacultyName: s.assignedFacultyName || 'Faculty Instructor',
       status: 'Active',
-      division: s.division || 'All',
+      division: s.division || 'All Divisions',
     }));
 
     setSubjects((prev) => [...prev, ...newSubs]);
@@ -876,7 +876,7 @@ export default function App() {
   const handleImportTimetableBatch = async (importedSlots: Partial<TimetableSlot>[]) => {
     const newSlots: TimetableSlot[] = importedSlots.map((ts, idx) => ({
       id: `slot-imported-${Date.now()}-${idx}`,
-      day: (ts.day as any) || 'Monday',
+      day: ts.day || 'Monday',
       timeSlot: ts.timeSlot || '09:00 AM - 10:00 AM',
       subjectId: ts.subjectId || 'sub-1',
       subjectCode: ts.subjectCode || 'AF101',
@@ -887,7 +887,7 @@ export default function App() {
       departmentId: ts.departmentId || 'dept-af',
       semester: Number(ts.semester) || 1,
       division: ts.division || 'A',
-      type: (ts.type as any) || 'Lecture',
+      type: ts.type || 'Lecture',
     }));
 
     setTimetable((prev) => [...prev, ...newSlots]);

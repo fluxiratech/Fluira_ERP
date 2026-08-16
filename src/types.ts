@@ -429,6 +429,7 @@ export interface Subject {
   code: string;
   name: string;
   departmentId: string;
+  departmentName?: string;
   programId?: string;
   programName?: string;
   courseId?: string;
@@ -439,6 +440,7 @@ export interface Subject {
   assignedFacultyId: string;
   assignedFacultyName: string;
   status?: 'Active' | 'Inactive';
+  division?: string;
 }
 
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';
@@ -455,6 +457,7 @@ export interface TimetableSlot {
   day: DayOfWeek;
   timeSlot: string; // e.g. "09:00 AM - 10:00 AM"
   subjectId: string;
+  subjectCode?: string;
   subjectName: string;
   facultyId: string;
   facultyName: string;

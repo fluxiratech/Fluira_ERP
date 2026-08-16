@@ -1518,6 +1518,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                       <option value="Div A">Division A</option>
                       <option value="Div B">Division B</option>
                       <option value="Div C">Division C</option>
+                      <option value="Div A + Div B">Div A + Div B (Combined)</option>
+                      <option value="Div B + Div C">Div B + Div C (Combined)</option>
+                      <option value="Div A + Div C">Div A + Div C (Combined)</option>
                     </select>
                   </div>
 
@@ -1614,6 +1617,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                                 <option value="Div A">Div A</option>
                                 <option value="Div B">Div B</option>
                                 <option value="Div C">Div C</option>
+                                <option value="Div A + Div B">Div A + Div B</option>
+                                <option value="Div B + Div C">Div B + Div C</option>
+                                <option value="Div A + Div C">Div A + Div C</option>
                               </select>
 
                               <button
@@ -1865,6 +1871,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     <option value="Div A">Div A</option>
                     <option value="Div B">Div B</option>
                     <option value="Div C">Div C</option>
+                    <option value="Div A + Div B">Div A + Div B</option>
+                    <option value="Div B + Div C">Div B + Div C</option>
+                    <option value="Div A + Div C">Div A + Div C</option>
                   </select>
                 </div>
               </div>
@@ -1994,6 +2003,9 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                             <option value="Div A">Div A</option>
                             <option value="Div B">Div B</option>
                             <option value="Div C">Div C</option>
+                            <option value="Div A + Div B">Div A + Div B</option>
+                            <option value="Div B + Div C">Div B + Div C</option>
+                            <option value="Div A + Div C">Div A + Div C</option>
                           </select>
                         </div>
                       )}
