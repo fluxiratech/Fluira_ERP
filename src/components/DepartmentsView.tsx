@@ -67,7 +67,7 @@ export const DepartmentsView: React.FC<DepartmentsViewProps> = ({
   onUpdateDepartment,
   onDeleteDepartment,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'CURRICULUM' | 'ACTIVITIES'>('ACTIVITIES');
+  const [activeSubTab, setActiveSubTab] = useState<'CURRICULUM' | 'ACTIVITIES'>('CURRICULUM');
   const [deptList, setDeptList] = useState<Department[]>(initialDepartments);
   const [subjectList, setSubjectList] = useState<Subject[]>(initialSubjects);
 
@@ -369,30 +369,42 @@ export const DepartmentsView: React.FC<DepartmentsViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Sub-Tab Navigation Header */}
-      <div className="bg-slate-900 p-1.5 rounded-2xl flex items-center gap-2 max-w-lg border border-slate-800">
-        <button
-          onClick={() => setActiveSubTab('ACTIVITIES')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl text-xs font-bold transition ${
-            activeSubTab === 'ACTIVITIES'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Department Activities & Events</span>
-        </button>
+      <div className="bg-slate-900 p-2 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border border-slate-800">
+        <div className="flex items-center gap-2 flex-1 max-w-lg">
+          <button
+            onClick={() => setActiveSubTab('CURRICULUM')}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl text-xs font-bold transition ${
+              activeSubTab === 'CURRICULUM'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Curriculum & Syllabus</span>
+          </button>
 
-        <button
-          onClick={() => setActiveSubTab('CURRICULUM')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl text-xs font-bold transition ${
-            activeSubTab === 'CURRICULUM'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Curriculum & Syllabus</span>
-        </button>
+          <button
+            onClick={() => setActiveSubTab('ACTIVITIES')}
+            className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl text-xs font-bold transition ${
+              activeSubTab === 'ACTIVITIES'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Department Activities & Events</span>
+          </button>
+        </div>
+
+        {canEdit && (
+          <button
+            onClick={handleOpenAddSubject}
+            className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center justify-center space-x-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Curriculum Subject</span>
+          </button>
+        )}
       </div>
 
       {activeSubTab === 'ACTIVITIES' ? (

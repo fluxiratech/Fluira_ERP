@@ -154,7 +154,7 @@ export const AttendanceEngine: React.FC<AttendanceEngineProps> = ({
     const matchProg = !s.programId || s.programId === selectedProgId || (selectedProgId === 'prog-ug' && s.course.includes('B.Com')) || (selectedProgId === 'prog-pg' && s.course.includes('M.Com'));
     const matchCourse = !s.courseId || s.courseId === selectedCourseId || s.course.includes(selectedCourseObj?.courseName || '');
     const matchSem = Number(s.semester) === Number(selectedSem);
-    const matchDiv = !selectedDiv || s.division === selectedDiv;
+    const matchDiv = !selectedDiv || selectedDiv === 'ALL' || s.division === selectedDiv || (selectedDiv.includes('+') && selectedDiv.split('+').map((d) => d.trim()).includes(s.division));
     return matchDept && matchProg && matchSem && matchDiv;
   });
 
@@ -412,9 +412,12 @@ export const AttendanceEngine: React.FC<AttendanceEngineProps> = ({
                 onChange={(e) => setSelectedDiv(e.target.value)}
                 className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
               >
-                {['A', 'B', 'C'].map((div) => (
-                  <option key={div} value={div}>Division {div}</option>
-                ))}
+                <option value="A">Division A</option>
+                <option value="B">Division B</option>
+                <option value="C">Division C</option>
+                <option value="A + B">Div A + Div B (Combined Lecture)</option>
+                <option value="B + C">Div B + Div C (Combined Lecture)</option>
+                <option value="ALL">All Divisions (Joint Session)</option>
               </select>
             </div>
 

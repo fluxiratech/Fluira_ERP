@@ -843,6 +843,65 @@ export default function App() {
     setUsersList((prev) => [...prev, ...newUsers]);
   };
 
+  const handleImportSubjectsBatch = async (importedSubjects: Partial<Subject>[]) => {
+    const newSubs: Subject[] = importedSubjects.map((s, idx) => ({
+      id: `sub-imported-${Date.now()}-${idx}`,
+      code: s.code || `SUB${100 + idx}`,
+      name: s.name || 'Subject Name',
+      departmentId: s.departmentId || 'dept-af',
+      departmentName: s.departmentName || 'Department of Accounting & Finance',
+      programId: s.programId || 'prog-ug',
+      courseId: s.courseId || 'course-baf',
+      semester: Number(s.semester) || 1,
+      credits: Number(s.credits) || 4,
+      type: (s.type as any) || 'Theory',
+      assignedFacultyId: s.assignedFacultyId || 'fac-1',
+      assignedFacultyName: s.assignedFacultyName || 'Faculty Instructor',
+      status: 'Active',
+      division: s.division || 'All',
+    }));
+
+    setSubjects((prev) => [...prev, ...newSubs]);
+    for (const sub of newSubs) {
+      try {
+        await fetch('/api/subjects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub),
+        });
+      } catch (err) {}
+    }
+  };
+
+  const handleImportTimetableBatch = async (importedSlots: Partial<TimetableSlot>[]) => {
+    const newSlots: TimetableSlot[] = importedSlots.map((ts, idx) => ({
+      id: `slot-imported-${Date.now()}-${idx}`,
+      day: (ts.day as any) || 'Monday',
+      timeSlot: ts.timeSlot || '09:00 AM - 10:00 AM',
+      subjectId: ts.subjectId || 'sub-1',
+      subjectCode: ts.subjectCode || 'AF101',
+      subjectName: ts.subjectName || 'Financial Accounting I',
+      facultyId: ts.facultyId || 'fac-1',
+      facultyName: ts.facultyName || 'Faculty Instructor',
+      classroom: ts.classroom || 'Room 201',
+      departmentId: ts.departmentId || 'dept-af',
+      semester: Number(ts.semester) || 1,
+      division: ts.division || 'A',
+      type: (ts.type as any) || 'Lecture',
+    }));
+
+    setTimetable((prev) => [...prev, ...newSlots]);
+    for (const slot of newSlots) {
+      try {
+        await fetch('/api/timetable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(slot),
+        });
+      } catch (err) {}
+    }
+  };
+
   const handleUpdateUser = async (updatedUser: User) => {
     setUsersList((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
     if (currentUser.id === updatedUser.id) {
@@ -1111,6 +1170,25 @@ export default function App() {
   const defaultersCount = students.filter((s) => s.attendancePercentage < settings.minimumAttendancePct).length;
   const pendingLeavesCount = leaves.filter((l) => l.status.startsWith('PENDING')).length;
 
+  const studentUsers: User[] = students.map((s) => ({
+    id: `u-${s.id}`,
+    name: s.fullName,
+    email: s.email,
+    role: 'Student' as Role,
+    departmentId: s.departmentId,
+    departmentName: s.departmentName,
+    phone: (s as any).mobile || (s as any).personalMobile || (s as any).parentMobile || '+91 98000 00000',
+    avatar: s.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    password: 'StudentPassword@123',
+    isActive: true,
+    createdAt: '2025-01-01',
+  }));
+
+  const allUsersForSettings = [
+    ...usersList,
+    ...studentUsers.filter((su) => !usersList.some((u) => u.email?.toLowerCase() === su.email?.toLowerCase())),
+  ];
+
   const userNotifications = notifications.filter((n) => {
     if (currentUser.role === 'Student') {
       if (n.role && n.role !== 'Student') return false;
@@ -1351,6 +1429,8 @@ export default function App() {
             <BulkUploadModule
               onImportSuccess={handleImportStudentsBatch}
               onImportFacultySuccess={handleImportFacultyBatch}
+              onImportSubjectsSuccess={handleImportSubjectsBatch}
+              onImportTimetableSuccess={handleImportTimetableBatch}
               importLogs={importLogs}
             />
           )}
@@ -1470,7 +1550,7 @@ export default function App() {
         onSaveSettings={handleSaveSettings}
         userRole={currentUser.role}
         currentUser={currentUser}
-        usersList={usersList}
+        usersList={allUsersForSettings}
         onUpdateUser={handleUpdateUser}
         onAddUser={handleAddUser}
         onDeleteUser={handleDeleteUser}

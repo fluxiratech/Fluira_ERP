@@ -1088,14 +1088,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search user by Name, Email, or Department..."
+                  placeholder="Search user by Name, Email, PRN, or Department..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex bg-slate-200/70 p-1 rounded-xl text-[11px] font-bold text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter('ALL')}
+                    className={`px-2.5 py-1 rounded-lg transition ${roleFilter === 'ALL' ? 'bg-white text-indigo-700 shadow-sm' : 'hover:text-slate-900'}`}
+                  >
+                    All Users ({usersList.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter('Faculty')}
+                    className={`px-2.5 py-1 rounded-lg transition ${roleFilter === 'Faculty' ? 'bg-white text-indigo-700 shadow-sm' : 'hover:text-slate-900'}`}
+                  >
+                    Faculty ({usersList.filter(u => u.role === 'Faculty').length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter('Student')}
+                    className={`px-2.5 py-1 rounded-lg transition ${roleFilter === 'Student' ? 'bg-white text-indigo-700 shadow-sm' : 'hover:text-slate-900'}`}
+                  >
+                    Students ({usersList.filter(u => u.role === 'Student').length})
+                  </button>
+                </div>
+
                 <select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value)}
@@ -1184,6 +1208,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 ? 'bg-blue-100 text-blue-800'
                                 : u.role === 'Class Teacher'
                                 ? 'bg-emerald-100 text-emerald-800'
+                                : u.role === 'Student'
+                                ? 'bg-indigo-100 text-indigo-800'
                                 : 'bg-slate-100 text-slate-800'
                             }`}
                           >

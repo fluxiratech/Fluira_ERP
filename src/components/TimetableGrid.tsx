@@ -344,10 +344,26 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
             onChange={(e) => setSelectedDiv(e.target.value)}
             className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
           >
-            {['A', 'B', 'C'].map((div) => (
-              <option key={div} value={div}>Division {div}</option>
-            ))}
+            <option value="A">Division A</option>
+            <option value="B">Division B</option>
+            <option value="C">Division C</option>
+            <option value="A + B">Div A + Div B (Combined Lecture)</option>
+            <option value="B + C">Div B + Div C (Combined Lecture)</option>
+            <option value="ALL">All Divisions (Combined Roster)</option>
           </select>
+        </div>
+      </div>
+
+      {/* Multi-Division Guidance Callout */}
+      <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-3.5 flex items-start space-x-3 text-xs">
+        <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="font-bold text-indigo-950">
+            Support for 1 Faculty Teaching Multiple Divisions (Combined / Joint Lectures)
+          </p>
+          <p className="text-indigo-800 text-[11px]">
+            If a faculty member delivers a lecture to 2 divisions simultaneously (e.g., Division A & Division B combined), assign the slot division as <strong>"Div A + Div B"</strong> or <strong>"ALL"</strong>. The conflict engine automatically permits this as a valid joint session, and the Attendance Engine will display students from both divisions on the roster.
+          </p>
         </div>
       </div>
 
