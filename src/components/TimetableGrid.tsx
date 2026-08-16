@@ -112,6 +112,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
   // New Slot Form State
   const [day, setDay] = useState<DayOfWeek>('Monday');
   const [timeSlot, setTimeSlot] = useState<string>('09:00 AM - 10:00 AM');
+  const [slotDivision, setSlotDivision] = useState<string>(selectedDiv || 'A');
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
   const [facultyId, setFacultyId] = useState<string>(facultyList[0]?.id || '');
   const [classroom, setClassroom] = useState<string>('Room 204');
@@ -127,6 +128,13 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     '03:00 PM - 04:00 PM',
   ];
 
+  // Sync slotDivision whenever main selectedDiv changes
+  useEffect(() => {
+    if (selectedDiv) {
+      setSlotDivision(selectedDiv === 'ALL' ? 'A' : selectedDiv);
+    }
+  }, [selectedDiv]);
+
   const availableSubjectsForSlot = subjects.filter((sub) => {
     const matchProg = !sub.programId || sub.programId === selectedProgId || (selectedProgId === 'prog-ug' && sub.courseCode === 'BAF') || (selectedProgId === 'prog-pg' && sub.courseCode === 'MBA');
     const matchCourse = !sub.courseId || sub.courseId === selectedCourseId;
@@ -135,14 +143,178 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     return matchProg && matchCourse && matchSem && matchStatus;
   });
 
-  // Ensure default subjectId is valid when filters change
+  // Auto-Assign Faculty Lookup Function:
+  // Maps a subject and division (e.g., Subject B for Division A) to the assigned faculty (e.g., Mr. A)
+  const getAutoAssignedFaculty = (
+    targetSubjectId: string,
+    targetDivision: string
+  ): { faculty: Faculty; matchedVia: string } | null => {
+    if (!targetSubjectId) return null;
+    const sub = subjects.find((s) => s.id === targetSubjectId);
+    if (!sub) return null;
+
+    const currentDiv = (targetDivision || selectedDiv || 'A').trim().toUpperCase();
+    const currentDivNorm = currentDiv.replace(/^DIV\s*/i, '').trim();
+
+    // 1. Search Faculty list for faculty who teach this subject and division
+    for (const fac of facultyList) {
+      if (fac.isActive === false) continue;
+
+      // Check currentAllocations
+      if (fac.currentAllocations && fac.currentAllocations.length > 0) {
+        for (const alloc of fac.currentAllocations) {
+          const matchesSub =
+            alloc.id === sub.id ||
+            (alloc.code && alloc.code.trim().toLowerCase() === sub.code.trim().toLowerCase()) ||
+            (alloc.name && alloc.name.trim().toLowerCase() === sub.name.trim().toLowerCase());
+
+          if (matchesSub) {
+            const allocDivs = alloc.divisions && alloc.divisions.length > 0
+              ? alloc.divisions
+              : alloc.division ? [alloc.division] : [];
+
+            if (allocDivs.length === 0) {
+              return {
+                faculty: fac,
+                matchedVia: `Assigned instructor for ${sub.code} (${sub.name})`,
+              };
+            }
+
+            const matchesDiv = allocDivs.some((d) => {
+              const normD = d.trim().toUpperCase().replace(/^DIV\s*/i, '').trim();
+              return normD === 'ALL' || normD === 'ALL DIVISIONS' || normD === currentDivNorm;
+            });
+
+            if (matchesDiv) {
+              return {
+                faculty: fac,
+                matchedVia: `Assigned for ${sub.code} on Division ${currentDivNorm}`,
+              };
+            }
+          }
+        }
+      }
+
+      // Check allocatedSubjects
+      if (fac.allocatedSubjects && fac.allocatedSubjects.length > 0) {
+        for (const item of fac.allocatedSubjects) {
+          if (typeof item === 'string') {
+            if (
+              item === sub.id ||
+              item.trim().toLowerCase() === sub.code.trim().toLowerCase() ||
+              item.trim().toLowerCase() === sub.name.trim().toLowerCase()
+            ) {
+              return {
+                faculty: fac,
+                matchedVia: `Assigned instructor for ${sub.code}`,
+              };
+            }
+          } else if (item && typeof item === 'object') {
+            const matchesSub =
+              item.subjectId === sub.id ||
+              item.subjectId === sub.code ||
+              (item as any).code === sub.code;
+
+            if (matchesSub) {
+              const itemDivs = item.divisions && item.divisions.length > 0
+                ? item.divisions
+                : item.division ? [item.division] : [];
+
+              if (itemDivs.length === 0) {
+                return {
+                  faculty: fac,
+                  matchedVia: `Assigned instructor for ${sub.code}`,
+                };
+              }
+
+              const matchesDiv = itemDivs.some((d) => {
+                const normD = d.trim().toUpperCase().replace(/^DIV\s*/i, '').trim();
+                return normD === 'ALL' || normD === 'ALL DIVISIONS' || normD === currentDivNorm;
+              });
+
+              if (matchesDiv) {
+                return {
+                  faculty: fac,
+                  matchedVia: `Assigned for ${sub.code} on Division ${currentDivNorm}`,
+                };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Fallback: Check Subject's direct assignedFacultyId or assignedFacultyName
+    if (sub.assignedFacultyId) {
+      const directFac = facultyList.find(
+        (f) => f.id === sub.assignedFacultyId || f.facultyId === sub.assignedFacultyId
+      );
+      if (directFac) {
+        return {
+          faculty: directFac,
+          matchedVia: `Subject lead instructor for ${sub.code} (${sub.name})`,
+        };
+      }
+    }
+
+    if (sub.assignedFacultyName) {
+      const directFac = facultyList.find(
+        (f) => f.fullName.trim().toLowerCase() === sub.assignedFacultyName.trim().toLowerCase()
+      );
+      if (directFac) {
+        return {
+          faculty: directFac,
+          matchedVia: `Subject lead instructor for ${sub.code} (${sub.name})`,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const handleSubjectChange = (newSubId: string) => {
+    setSubjectId(newSubId);
+    const autoResult = getAutoAssignedFaculty(newSubId, slotDivision);
+    if (autoResult) {
+      setFacultyId(autoResult.faculty.id);
+    }
+  };
+
+  const handleSlotDivisionChange = (newDiv: string) => {
+    setSlotDivision(newDiv);
+    const autoResult = getAutoAssignedFaculty(subjectId, newDiv);
+    if (autoResult) {
+      setFacultyId(autoResult.faculty.id);
+    }
+  };
+
+  // Ensure default subjectId is valid when filters change and auto-assign faculty
   useEffect(() => {
     if (availableSubjectsForSlot.length > 0) {
+      let targetSubId = subjectId;
       if (!availableSubjectsForSlot.some((s) => s.id === subjectId)) {
-        setSubjectId(availableSubjectsForSlot[0].id);
+        targetSubId = availableSubjectsForSlot[0].id;
+        setSubjectId(targetSubId);
+      }
+      const autoResult = getAutoAssignedFaculty(targetSubId, slotDivision);
+      if (autoResult) {
+        setFacultyId(autoResult.faculty.id);
       }
     }
   }, [selectedProgId, selectedCourseId, selectedSem, subjects]);
+
+  // When modal is opened, trigger auto-selection
+  useEffect(() => {
+    if (showAddModal && subjectId) {
+      const autoResult = getAutoAssignedFaculty(subjectId, slotDivision);
+      if (autoResult) {
+        setFacultyId(autoResult.faculty.id);
+      }
+    }
+  }, [showAddModal]);
+
+  const autoAssignedInfo = getAutoAssignedFaculty(subjectId, slotDivision);
+  const selectedSubObj = subjects.find((s) => s.id === subjectId);
 
   const filteredSlots = slots.filter((s) => {
     if (Number(s.semester) !== Number(selectedSem)) return false;
@@ -171,7 +343,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
     onAddSlot({
       departmentId: selectedDept,
       semester: selectedSem,
-      division: selectedDiv,
+      division: slotDivision || selectedDiv,
       day,
       timeSlot,
       subjectId,
@@ -573,13 +745,28 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
             </div>
 
             <form onSubmit={handleCreateSlot} className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Day of Week</label>
-                <select value={day} onChange={(e) => setDay(e.target.value as any)} className="w-full bg-slate-50 border p-2 rounded-lg font-medium">
-                  {days.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Target Division</label>
+                  <select
+                    value={slotDivision}
+                    onChange={(e) => handleSlotDivisionChange(e.target.value)}
+                    className="w-full bg-slate-50 border p-2 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="A">Division A</option>
+                    <option value="B">Division B</option>
+                    <option value="C">Division C</option>
+                    <option value="ALL">All Divisions (Combined)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Day of Week</label>
+                  <select value={day} onChange={(e) => setDay(e.target.value as any)} className="w-full bg-slate-50 border p-2 rounded-lg font-medium">
+                    {days.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -596,10 +783,20 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
 
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Subject</label>
-                <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className="w-full bg-slate-50 border p-2 rounded-lg font-medium">
-                  {availableSubjectsForSlot.map((sub) => (
-                    <option key={sub.id} value={sub.id}>{sub.code} - {sub.name}</option>
-                  ))}
+                <select
+                  value={subjectId}
+                  onChange={(e) => handleSubjectChange(e.target.value)}
+                  className="w-full bg-slate-50 border p-2 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500"
+                >
+                  {availableSubjectsForSlot.map((sub) => {
+                    const autoMatch = getAutoAssignedFaculty(sub.id, slotDivision);
+                    const matchedFacName = autoMatch ? autoMatch.faculty.fullName : sub.assignedFacultyName;
+                    return (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.code} - {sub.name} {matchedFacName ? `(${matchedFacName})` : ''}
+                      </option>
+                    );
+                  })}
                   {availableSubjectsForSlot.length === 0 && (
                     <option value="">No active subjects for this Program & Semester</option>
                   )}
@@ -607,12 +804,40 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Assigned Faculty</label>
-                <select value={facultyId} onChange={(e) => setFacultyId(e.target.value)} className="w-full bg-slate-50 border p-2 rounded-lg font-medium">
-                  {facultyList.map((f) => (
-                    <option key={f.id} value={f.id}>{f.fullName} ({f.designation})</option>
-                  ))}
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700">Assigned Faculty Instructor</label>
+                  {autoAssignedInfo && (
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Auto-Matched
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={facultyId}
+                  onChange={(e) => setFacultyId(e.target.value)}
+                  className="w-full bg-slate-50 border p-2 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500"
+                >
+                  {facultyList.map((f) => {
+                    const isMatched = autoAssignedInfo?.faculty.id === f.id;
+                    return (
+                      <option key={f.id} value={f.id}>
+                        {f.fullName} ({f.designation}) {isMatched ? `★ [Mapped Instructor for Div ${slotDivision}]` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
+                {autoAssignedInfo ? (
+                  <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-200/80 rounded-lg text-[11px] text-emerald-800 flex items-start space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Auto-Selected:</strong> {autoAssignedInfo.faculty.fullName} is assigned to teach <strong>{selectedSubObj?.code || 'this subject'}</strong> on Division <strong>{slotDivision}</strong>.
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    No specific faculty mapped for {selectedSubObj?.code || 'this subject'} on Div {slotDivision}. Defaulting to list selection.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
