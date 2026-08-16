@@ -13,6 +13,7 @@ import {
   LeaveRequest,
   CollegeSettings,
 } from '../../types';
+import { analyzeTimetableConflicts } from '../../utils/timetableConflictDetector';
 import {
   Users,
   GraduationCap,
@@ -33,6 +34,7 @@ import {
   BookOpen,
   UserCog,
   Layers,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   BarChart,
@@ -87,6 +89,9 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
   const avgAttendance = students.length
     ? Number((students.reduce((acc, s) => acc + s.attendancePercentage, 0) / students.length).toFixed(1))
     : 0;
+
+  // Real-time Timetable Conflict Analysis
+  const timetableConflicts = analyzeTimetableConflicts(timetable);
 
   // Department Bar Chart Data
   const deptData = departments.map((d) => ({
@@ -459,6 +464,102 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
               </div>
             </div>
 
+          </div>
+
+          {/* Real-time Timetable Conflicts Detector Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-4">
+              <div className="flex items-center space-x-2.5">
+                <div className={`p-2 rounded-xl ${timetableConflicts.length > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Real-Time Timetable Conflict Analysis</h3>
+                  <p className="text-[11px] text-slate-500">Automated overlap detection for faculty double-booking & room collisions</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <span className={`px-3 py-1 rounded-full text-xs font-black border ${
+                  timetableConflicts.length > 0
+                    ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                }`}>
+                  {timetableConflicts.length > 0
+                    ? `⚠️ ${timetableConflicts.length} Active Conflict(s) Detected`
+                    : '✓ All Slots Validated (0 Conflicts)'}
+                </span>
+
+                <button
+                  onClick={() => onNavigate('timetable')}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center space-x-1"
+                >
+                  <span>Go to Timetable Grid</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {timetableConflicts.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {timetableConflicts.map((c, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-xl border bg-rose-50/60 border-rose-200 space-y-2.5 relative"
+                  >
+                    <div className="flex justify-between items-center text-xs font-bold">
+                      <span className="px-2 py-0.5 rounded bg-rose-200 text-rose-900 font-extrabold text-[10px] uppercase">
+                        {c.reason === 'FACULTY_DOUBLE_BOOKED' ? '👤 Faculty Double Booked' : '🏫 Classroom Collision'}
+                      </span>
+                      <span className="font-mono text-slate-700 font-bold bg-white px-2 py-0.5 rounded border border-rose-200">
+                        {c.slot1.day} • {c.slot1.timeSlot}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-rose-200/80">
+                      <div className="bg-white p-2.5 rounded-lg border border-rose-200 space-y-1">
+                        <p className="font-bold text-slate-900 text-[11px] truncate">{c.slot1.subjectName}</p>
+                        <p className="text-[10px] text-indigo-600 font-semibold">
+                          Div {c.slot1.division} • Sem {c.slot1.semester}
+                        </p>
+                        <p className="text-[10px] text-slate-500">Prof: {c.slot1.facultyName}</p>
+                        <p className="text-[10px] text-slate-500">Room: {c.slot1.classroom}</p>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-rose-200 space-y-1">
+                        <p className="font-bold text-slate-900 text-[11px] truncate">{c.slot2.subjectName}</p>
+                        <p className="text-[10px] text-indigo-600 font-semibold">
+                          Div {c.slot2.division} • Sem {c.slot2.semester}
+                        </p>
+                        <p className="text-[10px] text-slate-500">Prof: {c.slot2.facultyName}</p>
+                        <p className="text-[10px] text-slate-500">Room: {c.slot2.classroom}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-5 rounded-xl bg-emerald-50/80 border border-emerald-200 flex items-center justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-200 text-emerald-800 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-emerald-950">Timetable Schedule Fully Validated</h4>
+                    <p className="text-[11px] text-emerald-800 mt-0.5">
+                      No overlapping faculty assignments or room collisions found across all scheduled lectures.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => onNavigate('timetable')}
+                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition shrink-0"
+                >
+                  View Full Schedule
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Critical Defaulters Stream */}

@@ -15,6 +15,7 @@ export interface User {
   phone?: string;
   avatar?: string;
   password?: string;
+  linkedStudentId?: string;
   isActive: boolean;
   lastLogin?: string;
   createdAt: string;

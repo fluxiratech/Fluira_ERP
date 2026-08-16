@@ -354,6 +354,7 @@ export default function App() {
       phone: (fullStudent as any).personalMobile || (fullStudent as any).mobile || ns.mobile || '+91 98000 00000',
       avatar: fullStudent.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
       password: ns.password || 'StudentPassword@123',
+      linkedStudentId: fullStudent.id,
       isActive: true,
       createdAt: new Date().toISOString().split('T')[0],
     };
@@ -528,7 +529,23 @@ export default function App() {
         alert(errJson.error || 'Failed to add subject');
       }
     } catch (err) {
-      setSubjects((prev) => [...prev, { id: `sub-${Date.now()}`, ...(newSub as any) }]);
+      const fallbackSub: Subject = {
+        id: `sub-${Date.now()}`,
+        code: newSub.code || 'SUB-NEW',
+        name: newSub.name || 'New Subject',
+        departmentId: newSub.departmentId || 'dept-af',
+        departmentName: newSub.departmentName || 'Department of Accounting & Finance',
+        programId: newSub.programId || 'prog-ug',
+        courseId: newSub.courseId || 'course-baf',
+        semester: Number(newSub.semester) || 1,
+        type: newSub.type || 'Theory',
+        credits: Number(newSub.credits) || 4,
+        assignedFacultyId: newSub.assignedFacultyId || 'fac-1',
+        assignedFacultyName: newSub.assignedFacultyName || 'Faculty Instructor',
+        status: newSub.status || 'Active',
+        division: newSub.division || 'All Divisions',
+      };
+      setSubjects((prev) => [...prev, fallbackSub]);
     }
   };
 
@@ -566,7 +583,22 @@ export default function App() {
       });
       refreshAllData();
     } catch (err) {
-      setTimetable((prev) => [...prev, { id: `t-${Date.now()}`, ...(newSlot as any) }]);
+      const fallbackSlot: TimetableSlot = {
+        id: `t-${Date.now()}`,
+        departmentId: newSlot.departmentId || 'dept-af',
+        semester: Number(newSlot.semester) || 1,
+        division: newSlot.division || 'A',
+        day: newSlot.day || 'Monday',
+        timeSlot: newSlot.timeSlot || '09:00 AM - 10:00 AM',
+        subjectId: newSlot.subjectId || 'sub-1',
+        subjectCode: newSlot.subjectCode || 'AF101',
+        subjectName: newSlot.subjectName || 'Financial Accounting I',
+        facultyId: newSlot.facultyId || 'fac-1',
+        facultyName: newSlot.facultyName || 'Faculty Instructor',
+        classroom: newSlot.classroom || 'Room 201',
+        type: newSlot.type || 'Lecture',
+      };
+      setTimetable((prev) => [...prev, fallbackSlot]);
     }
   };
 
@@ -1180,6 +1212,7 @@ export default function App() {
     phone: (s as any).mobile || (s as any).personalMobile || (s as any).parentMobile || '+91 98000 00000',
     avatar: s.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     password: 'StudentPassword@123',
+    linkedStudentId: s.id,
     isActive: true,
     createdAt: '2025-01-01',
   }));

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Student360Profile, Faculty, ImportHistoryLog, DepartmentActivity } from '../types';
+import { Student360Profile, Faculty, Subject, TimetableSlot, ImportHistoryLog, DepartmentActivity } from '../types';
 import {
   Upload,
   FileSpreadsheet,
@@ -15,11 +15,15 @@ import {
   UserCheck,
   UserCog,
   Award,
+  BookOpen,
+  Calendar,
 } from 'lucide-react';
 
 interface BulkUploadModuleProps {
   onImportSuccess: (importedStudents: Partial<Student360Profile>[]) => void;
   onImportFacultySuccess?: (importedFaculty: Partial<Faculty>[]) => void;
+  onImportSubjectsSuccess?: (importedSubjects: Partial<Subject>[]) => void;
+  onImportTimetableSuccess?: (importedSlots: Partial<TimetableSlot>[]) => void;
   importLogs: ImportHistoryLog[];
 }
 
@@ -91,15 +95,49 @@ interface ParsedFacultyRow {
   errors: string[];
 }
 
+interface ParsedSubjectRow {
+  rowNum: number;
+  code: string;
+  name: string;
+  departmentName: string;
+  semester: number;
+  credits: number;
+  type: string;
+  division: string;
+  assignedFacultyName: string;
+  isValid: boolean;
+  errors: string[];
+}
+
+interface ParsedTimetableRow {
+  rowNum: number;
+  day: string;
+  timeSlot: string;
+  subjectCode: string;
+  subjectName: string;
+  facultyName: string;
+  classroom: string;
+  departmentName: string;
+  semester: number;
+  division: string;
+  type: string;
+  isValid: boolean;
+  errors: string[];
+}
+
 export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
   onImportSuccess,
   onImportFacultySuccess,
+  onImportSubjectsSuccess,
+  onImportTimetableSuccess,
   importLogs,
 }) => {
-  const [importCategory, setImportCategory] = useState<'students' | 'faculty'>('students');
+  const [importCategory, setImportCategory] = useState<'students' | 'faculty' | 'subjects' | 'timetable'>('students');
   const [file, setFile] = useState<File | null>(null);
   const [parsedStudentRows, setParsedStudentRows] = useState<ParsedStudentRow[]>([]);
   const [parsedFacultyRows, setParsedFacultyRows] = useState<ParsedFacultyRow[]>([]);
+  const [parsedSubjectRows, setParsedSubjectRows] = useState<ParsedSubjectRow[]>([]);
+  const [parsedTimetableRows, setParsedTimetableRows] = useState<ParsedTimetableRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<'upload' | 'history'>('upload');
   const [previewTab, setPreviewTab] = useState<'basic' | 'parents' | 'academics' | 'skills' | 'activities'>('basic');
@@ -298,6 +336,88 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
     downloadCSVFile(csvContent, 'Faculty_Bulk_Import_Sample_Template.csv');
   };
 
+  const handleDownloadSampleSubjectCSV = () => {
+    const headers = [
+      'Subject Code',
+      'Subject Name',
+      'Department',
+      'Semester',
+      'Credits',
+      'Type',
+      'Division',
+      'Assigned Faculty',
+    ].join(',');
+
+    const row1 = [
+      'AF101',
+      'Financial Accounting I',
+      'Department of Accounting & Finance',
+      '1',
+      '4',
+      'Theory',
+      'All Divisions',
+      'Prof. Rajesh K. Varma',
+    ].map((v) => `"${v}"`).join(',');
+
+    const row2 = [
+      'AF102',
+      'Cost Accounting I',
+      'Department of Accounting & Finance',
+      '1',
+      '4',
+      'Theory',
+      'All Divisions',
+      'Dr. Meenakshi Joshi',
+    ].map((v) => `"${v}"`).join(',');
+
+    const csvContent = `${headers}\n${row1}\n${row2}\n`;
+    downloadCSVFile(csvContent, 'Subjects_Bulk_Import_Sample_Template.csv');
+  };
+
+  const handleDownloadSampleTimetableCSV = () => {
+    const headers = [
+      'Day',
+      'Time Slot',
+      'Subject Code',
+      'Subject Name',
+      'Faculty Name',
+      'Classroom',
+      'Department',
+      'Semester',
+      'Division',
+      'Type',
+    ].join(',');
+
+    const row1 = [
+      'Monday',
+      '09:00 AM - 10:00 AM',
+      'AF101',
+      'Financial Accounting I',
+      'Prof. Rajesh K. Varma',
+      'Room 201',
+      'Department of Accounting & Finance',
+      '1',
+      'A',
+      'Lecture',
+    ].map((v) => `"${v}"`).join(',');
+
+    const row2 = [
+      'Monday',
+      '10:00 AM - 11:00 AM',
+      'AF102',
+      'Cost Accounting I',
+      'Dr. Meenakshi Joshi',
+      'Room 202',
+      'Department of Accounting & Finance',
+      '1',
+      'A',
+      'Lecture',
+    ].map((v) => `"${v}"`).join(',');
+
+    const csvContent = `${headers}\n${row1}\n${row2}\n`;
+    downloadCSVFile(csvContent, 'Timetable_Bulk_Import_Sample_Template.csv');
+  };
+
   const downloadCSVFile = (content: string, filename: string) => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -340,8 +460,12 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
       const text = event.target?.result as string;
       if (importCategory === 'students') {
         parseStudentCSV(text);
-      } else {
+      } else if (importCategory === 'faculty') {
         parseFacultyCSV(text);
+      } else if (importCategory === 'subjects') {
+        parseSubjectCSV(text);
+      } else if (importCategory === 'timetable') {
+        parseTimetableCSV(text);
       }
       setIsProcessing(false);
     };
@@ -694,6 +818,123 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
     setParsedFacultyRows(rows);
   };
 
+  const parseSubjectCSV = (csvText: string) => {
+    const lines = csvText.split(/\r\n|\n/).filter((line) => line.trim().length > 0);
+    if (lines.length < 2) {
+      alert('The uploaded Subjects CSV file appears to be empty or missing headers.');
+      return;
+    }
+
+    const headerCols = parseCSVLine(lines[0]).map((h) => h.toLowerCase().trim());
+
+    const getVal = (cols: string[], possibleHeaders: string[], fallbackIdx: number, defaultVal: string = ''): string => {
+      for (const h of possibleHeaders) {
+        const idx = headerCols.findIndex((hdr) => hdr.includes(h.toLowerCase()));
+        if (idx !== -1 && cols[idx] !== undefined) {
+          return cols[idx].trim();
+        }
+      }
+      return cols[fallbackIdx] !== undefined ? cols[fallbackIdx].trim() : defaultVal;
+    };
+
+    const rows: ParsedSubjectRow[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < 2) continue;
+
+      const code = getVal(cols, ['subject code', 'code', 'sub code'], 0, `SUB${100 + i}`);
+      const name = getVal(cols, ['subject name', 'name', 'subject'], 1);
+      const departmentName = getVal(cols, ['department', 'dept'], 2, 'Department of Accounting & Finance');
+      const sem = parseInt(getVal(cols, ['semester', 'sem'], 3, '1'), 10) || 1;
+      const credits = parseInt(getVal(cols, ['credits', 'credit'], 4, '4'), 10) || 4;
+      const type = getVal(cols, ['type', 'subject type'], 5, 'Theory');
+      const division = getVal(cols, ['division', 'div'], 6, 'All Divisions');
+      const faculty = getVal(cols, ['assigned faculty', 'faculty', 'professor'], 7, 'Faculty Instructor');
+
+      const errors: string[] = [];
+      if (!name) errors.push('Subject Name is required');
+      if (!code) errors.push('Subject Code is required');
+
+      rows.push({
+        rowNum: i,
+        code,
+        name,
+        departmentName,
+        semester: sem,
+        credits,
+        type,
+        division,
+        assignedFacultyName: faculty,
+        isValid: errors.length === 0,
+        errors,
+      });
+    }
+
+    setParsedSubjectRows(rows);
+  };
+
+  const parseTimetableCSV = (csvText: string) => {
+    const lines = csvText.split(/\r\n|\n/).filter((line) => line.trim().length > 0);
+    if (lines.length < 2) {
+      alert('The uploaded Timetable CSV file appears to be empty or missing headers.');
+      return;
+    }
+
+    const headerCols = parseCSVLine(lines[0]).map((h) => h.toLowerCase().trim());
+
+    const getVal = (cols: string[], possibleHeaders: string[], fallbackIdx: number, defaultVal: string = ''): string => {
+      for (const h of possibleHeaders) {
+        const idx = headerCols.findIndex((hdr) => hdr.includes(h.toLowerCase()));
+        if (idx !== -1 && cols[idx] !== undefined) {
+          return cols[idx].trim();
+        }
+      }
+      return cols[fallbackIdx] !== undefined ? cols[fallbackIdx].trim() : defaultVal;
+    };
+
+    const rows: ParsedTimetableRow[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (cols.length < 3) continue;
+
+      const day = getVal(cols, ['day', 'weekday'], 0, 'Monday');
+      const timeSlot = getVal(cols, ['time slot', 'time', 'slot'], 1, '09:00 AM - 10:00 AM');
+      const subjectCode = getVal(cols, ['subject code', 'code'], 2, 'AF101');
+      const subjectName = getVal(cols, ['subject name', 'subject'], 3, 'Financial Accounting I');
+      const facultyName = getVal(cols, ['faculty name', 'faculty', 'professor'], 4, 'Faculty Instructor');
+      const classroom = getVal(cols, ['classroom', 'room'], 5, 'Room 201');
+      const departmentName = getVal(cols, ['department', 'dept'], 6, 'Department of Accounting & Finance');
+      const sem = parseInt(getVal(cols, ['semester', 'sem'], 7, '1'), 10) || 1;
+      const division = getVal(cols, ['division', 'div'], 8, 'A');
+      const type = getVal(cols, ['type', 'lecture type'], 9, 'Lecture');
+
+      const errors: string[] = [];
+      if (!day) errors.push('Day is required');
+      if (!timeSlot) errors.push('Time Slot is required');
+      if (!subjectName && !subjectCode) errors.push('Subject Name/Code is required');
+
+      rows.push({
+        rowNum: i,
+        day,
+        timeSlot,
+        subjectCode,
+        subjectName,
+        facultyName,
+        classroom,
+        departmentName,
+        semester: sem,
+        division,
+        type,
+        isValid: errors.length === 0,
+        errors,
+      });
+    }
+
+    setParsedTimetableRows(rows);
+  };
+
   const handleConfirmStudentImport = () => {
     const validRows = parsedStudentRows.filter((r) => r.isValid);
     if (validRows.length === 0) {
@@ -797,10 +1038,80 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
     setParsedFacultyRows([]);
   };
 
+  const handleConfirmSubjectImport = () => {
+    const validRows = parsedSubjectRows.filter((r) => r.isValid);
+    if (validRows.length === 0) {
+      alert('No valid subject rows to import. Please resolve CSV validation errors.');
+      return;
+    }
+
+    const newSubjects: Partial<Subject>[] = validRows.map((r) => ({
+      code: r.code,
+      name: r.name,
+      departmentName: r.departmentName,
+      departmentId: 'dept-af',
+      programId: 'prog-ug',
+      courseId: 'course-baf',
+      semester: r.semester,
+      credits: r.credits,
+      type: r.type,
+      division: r.division,
+      assignedFacultyName: r.assignedFacultyName,
+      status: 'Active',
+    }));
+
+    if (onImportSubjectsSuccess) {
+      onImportSubjectsSuccess(newSubjects);
+    }
+    alert(`Successfully imported ${validRows.length} subjects into the Course Curriculum Catalog!`);
+    setFile(null);
+    setParsedSubjectRows([]);
+  };
+
+  const handleConfirmTimetableImport = () => {
+    const validRows = parsedTimetableRows.filter((r) => r.isValid);
+    if (validRows.length === 0) {
+      alert('No valid timetable rows to import. Please resolve CSV validation errors.');
+      return;
+    }
+
+    const newSlots: Partial<TimetableSlot>[] = validRows.map((r) => ({
+      day: r.day,
+      timeSlot: r.timeSlot,
+      subjectCode: r.subjectCode,
+      subjectName: r.subjectName,
+      facultyName: r.facultyName,
+      classroom: r.classroom,
+      departmentName: r.departmentName,
+      departmentId: 'dept-af',
+      semester: r.semester,
+      division: r.division,
+      type: r.type,
+    }));
+
+    if (onImportTimetableSuccess) {
+      onImportTimetableSuccess(newSlots);
+    }
+    alert(`Successfully imported ${validRows.length} timetable lecture slots into the Weekly Schedule!`);
+    setFile(null);
+    setParsedTimetableRows([]);
+  };
+
   const validStudentCount = parsedStudentRows.filter((r) => r.isValid).length;
   const invalidStudentCount = parsedStudentRows.filter((r) => !r.isValid).length;
   const validFacultyCount = parsedFacultyRows.filter((r) => r.isValid).length;
   const invalidFacultyCount = parsedFacultyRows.filter((r) => !r.isValid).length;
+  const validSubjectCount = parsedSubjectRows.filter((r) => r.isValid).length;
+  const invalidSubjectCount = parsedSubjectRows.filter((r) => !r.isValid).length;
+  const validTimetableCount = parsedTimetableRows.filter((r) => r.isValid).length;
+  const invalidTimetableCount = parsedTimetableRows.filter((r) => !r.isValid).length;
+
+  const categoryLabelMap = {
+    students: 'Student',
+    faculty: 'Faculty',
+    subjects: 'Subject',
+    timetable: 'Timetable',
+  };
 
   return (
     <div className="space-y-6">
@@ -812,7 +1123,7 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
             <h2 className="text-xl font-bold">Bulk CSV & Excel Import Module</h2>
           </div>
           <p className="text-xs text-slate-300 mt-1">
-            Batch import Students and Faculty members with real-time schema validation, duplicate detection, and audit logging.
+            Batch import Students, Faculty, Subjects, and Timetable slots with real-time schema validation, duplicate detection, and audit logging.
           </p>
         </div>
 
@@ -840,23 +1151,25 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
 
       {activeTab === 'upload' && (
         <div className="space-y-6">
-          {/* Category Switcher: Students vs Faculty */}
-          <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2 max-w-md">
+          {/* Category Switcher: Students vs Faculty vs Subjects vs Timetable */}
+          <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
                 setImportCategory('students');
                 setFile(null);
                 setParsedStudentRows([]);
                 setParsedFacultyRows([]);
+                setParsedSubjectRows([]);
+                setParsedTimetableRows([]);
               }}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
                 importCategory === 'students'
                   ? 'bg-indigo-600 text-white shadow-md'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
               <Users className="w-4 h-4" />
-              <span>Student CSV Import</span>
+              <span>Students</span>
             </button>
             <button
               onClick={() => {
@@ -864,15 +1177,53 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
                 setFile(null);
                 setParsedStudentRows([]);
                 setParsedFacultyRows([]);
+                setParsedSubjectRows([]);
+                setParsedTimetableRows([]);
               }}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
                 importCategory === 'faculty'
                   ? 'bg-indigo-600 text-white shadow-md'
                   : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
               <UserCog className="w-4 h-4" />
-              <span>Faculty CSV Import</span>
+              <span>Faculty</span>
+            </button>
+            <button
+              onClick={() => {
+                setImportCategory('subjects');
+                setFile(null);
+                setParsedStudentRows([]);
+                setParsedFacultyRows([]);
+                setParsedSubjectRows([]);
+                setParsedTimetableRows([]);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
+                importCategory === 'subjects'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Subjects</span>
+            </button>
+            <button
+              onClick={() => {
+                setImportCategory('timetable');
+                setFile(null);
+                setParsedStudentRows([]);
+                setParsedFacultyRows([]);
+                setParsedSubjectRows([]);
+                setParsedTimetableRows([]);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-2 ${
+                importCategory === 'timetable'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Calendar className="w-4 h-4" />
+              <span>Timetable</span>
             </button>
           </div>
 
@@ -884,7 +1235,7 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
 
             <div>
               <h3 className="text-sm font-bold text-slate-800">
-                Choose {importCategory === 'students' ? 'Student' : 'Faculty'} CSV file or drag and drop
+                Choose {categoryLabelMap[importCategory]} CSV file or drag and drop
               </h3>
               <p className="text-xs text-slate-500 mt-1">
                 Supports standard comma-separated values (.csv) with header mapping
@@ -894,16 +1245,21 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
             <div className="flex flex-wrap items-center justify-center gap-3">
               <label className="cursor-pointer px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition inline-flex items-center space-x-2">
                 <FileText className="w-4 h-4" />
-                <span>Select {importCategory === 'students' ? 'Student' : 'Faculty'} CSV File</span>
+                <span>Select {categoryLabelMap[importCategory]} CSV File</span>
                 <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
               </label>
 
               <button
-                onClick={importCategory === 'students' ? handleDownloadSampleStudentCSV : handleDownloadSampleFacultyCSV}
+                onClick={() => {
+                  if (importCategory === 'students') handleDownloadSampleStudentCSV();
+                  else if (importCategory === 'faculty') handleDownloadSampleFacultyCSV();
+                  else if (importCategory === 'subjects') handleDownloadSampleSubjectCSV();
+                  else if (importCategory === 'timetable') handleDownloadSampleTimetableCSV();
+                }}
                 className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition inline-flex items-center space-x-2"
               >
                 <Download className="w-4 h-4" />
-                <span>Download Sample {importCategory === 'students' ? 'Student' : 'Faculty'} CSV Template</span>
+                <span>Download Sample {categoryLabelMap[importCategory]} CSV Template</span>
               </button>
             </div>
 
@@ -1277,6 +1633,184 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
                               </span>
                             ))}
                           </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {r.isValid ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              VALID
+                            </span>
+                          ) : (
+                            <div className="text-[10px] text-rose-600 font-bold space-y-0.5 text-right">
+                              {r.errors.map((err, eIdx) => (
+                                <p key={eIdx}>• {err}</p>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Subjects Validation Summary Bar */}
+          {importCategory === 'subjects' && parsedSubjectRows.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Subject CSV Parsing & Validation Results</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Found {parsedSubjectRows.length} total subject records in file
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4 text-xs font-bold">
+                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{validSubjectCount} Valid Rows</span>
+                  </span>
+                  <span className="px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg flex items-center space-x-1.5">
+                    <XCircle className="w-4 h-4" />
+                    <span>{invalidSubjectCount} Errors</span>
+                  </span>
+                  <button
+                    onClick={handleConfirmSubjectImport}
+                    disabled={validSubjectCount === 0}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition flex items-center space-x-2"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    <span>Import {validSubjectCount} Valid Subjects</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Subject Data Preview Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-96">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Row</th>
+                      <th className="px-4 py-3">Subject Code</th>
+                      <th className="px-4 py-3">Subject Name</th>
+                      <th className="px-4 py-3">Department</th>
+                      <th className="px-4 py-3">Semester</th>
+                      <th className="px-4 py-3">Credits & Type</th>
+                      <th className="px-4 py-3">Division</th>
+                      <th className="px-4 py-3">Assigned Faculty</th>
+                      <th className="px-4 py-3 text-right">Validation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {parsedSubjectRows.map((r) => (
+                      <tr key={r.rowNum} className={r.isValid ? 'hover:bg-slate-50' : 'bg-rose-50/40 hover:bg-rose-50'}>
+                        <td className="px-4 py-3 text-slate-400 font-mono">#{r.rowNum}</td>
+                        <td className="px-4 py-3 font-mono font-bold text-indigo-600">{r.code}</td>
+                        <td className="px-4 py-3 font-bold text-slate-900">{r.name}</td>
+                        <td className="px-4 py-3 text-slate-600">{r.departmentName}</td>
+                        <td className="px-4 py-3 text-slate-600 font-bold">Sem {r.semester}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          <div>Credits: <strong className="text-slate-800">{r.credits}</strong></div>
+                          <div className="text-[10px] text-slate-500">{r.type}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">{r.division}</td>
+                        <td className="px-4 py-3 font-semibold text-slate-800">{r.assignedFacultyName}</td>
+                        <td className="px-4 py-3 text-right">
+                          {r.isValid ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              VALID
+                            </span>
+                          ) : (
+                            <div className="text-[10px] text-rose-600 font-bold space-y-0.5 text-right">
+                              {r.errors.map((err, eIdx) => (
+                                <p key={eIdx}>• {err}</p>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Timetable Validation Summary Bar */}
+          {importCategory === 'timetable' && parsedTimetableRows.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Timetable CSV Parsing & Validation Results</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Found {parsedTimetableRows.length} total timetable slots in file
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4 text-xs font-bold">
+                  <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{validTimetableCount} Valid Rows</span>
+                  </span>
+                  <span className="px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg flex items-center space-x-1.5">
+                    <XCircle className="w-4 h-4" />
+                    <span>{invalidTimetableCount} Errors</span>
+                  </span>
+                  <button
+                    onClick={handleConfirmTimetableImport}
+                    disabled={validTimetableCount === 0}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition flex items-center space-x-2"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    <span>Import {validTimetableCount} Valid Slots</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Timetable Data Preview Table */}
+              <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-96">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Row</th>
+                      <th className="px-4 py-3">Day & Time Slot</th>
+                      <th className="px-4 py-3">Subject</th>
+                      <th className="px-4 py-3">Faculty</th>
+                      <th className="px-4 py-3">Classroom</th>
+                      <th className="px-4 py-3">Department & Sem</th>
+                      <th className="px-4 py-3">Division</th>
+                      <th className="px-4 py-3">Type</th>
+                      <th className="px-4 py-3 text-right">Validation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {parsedTimetableRows.map((r) => (
+                      <tr key={r.rowNum} className={r.isValid ? 'hover:bg-slate-50' : 'bg-rose-50/40 hover:bg-rose-50'}>
+                        <td className="px-4 py-3 text-slate-400 font-mono">#{r.rowNum}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">{r.day}</div>
+                          <div className="text-[10px] text-indigo-600 font-mono">{r.timeSlot}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">{r.subjectName}</div>
+                          <div className="text-[10px] font-mono text-slate-500">{r.subjectCode}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-800 font-medium">{r.facultyName}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-mono text-[10px] font-bold rounded">
+                            {r.classroom}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 text-[10px]">
+                          <div>{r.departmentName}</div>
+                          <div className="font-bold text-slate-800">Sem {r.semester}</div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 font-bold">Div {r.division}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded">
+                            {r.type}
+                          </span>
                         </td>
                         <td className="px-4 py-3 text-right">
                           {r.isValid ? (
