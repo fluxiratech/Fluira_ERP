@@ -349,14 +349,21 @@ async function startServer() {
   app.post('/api/students/batch', async (req, res) => {
     try {
       const newStudents: Student360Profile[] = req.body;
+      let count = 0;
       if (Array.isArray(newStudents)) {
         for (const st of newStudents) {
-          await upsertStudent(st);
+          try {
+            await upsertStudent(st);
+            count++;
+          } catch (stErr: any) {
+            console.error(`[batch student error] Failed for student ${st?.studentId || st?.id}:`, stErr?.message || stErr);
+          }
         }
-        await addAuditLog('Admin', 'Admin', 'BATCH_IMPORT_STUDENTS', 'USER_MGMT', `Batch imported ${newStudents.length} students into Cloud SQL`);
+        await addAuditLog('Admin', 'Admin', 'BATCH_IMPORT_STUDENTS', 'USER_MGMT', `Batch imported ${count} students into Cloud SQL`);
       }
-      res.json({ success: true, count: newStudents?.length || 0 });
+      res.json({ success: true, count });
     } catch (err: any) {
+      console.error('[batch student server error]:', err?.message || err);
       res.status(500).json({ error: err.message });
     }
   });
