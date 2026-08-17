@@ -74,7 +74,15 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
 
   // If logged in as Student, render ONLY their own 360° Profile
   if (userRole === 'Student') {
-    const myStudent = students.find((s) => s.id === currentUser?.linkedStudentId || s.email === currentUser?.email) || students[0];
+    const userEmail = (currentUser?.email || '').toLowerCase();
+    const linkedId = currentUser?.linkedStudentId;
+    const myStudent =
+      studentList.find(
+        (s) =>
+          (linkedId && (s.id === linkedId || s.studentId === linkedId)) ||
+          (s.email && s.email.toLowerCase() === userEmail) ||
+          (currentUser?.id && (s.studentId === currentUser.id || s.id === currentUser.id))
+      ) || studentList[0];
 
     if (!myStudent) {
       return (
@@ -128,25 +136,25 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
             <img
               src={myStudent.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
               className="w-24 h-24 rounded-2xl object-cover ring-4 ring-indigo-50 border border-slate-200 shadow-sm"
-              alt={myStudent.fullName}
+              alt={myStudent.fullName || 'Student'}
             />
             <div className="space-y-1 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-900">{myStudent.fullName}</h2>
+                <h2 className="text-xl font-bold text-slate-900">{myStudent.fullName || 'Student Profile'}</h2>
                 <span className="px-2.5 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full">
                   VERIFIED ENROLLED STUDENT
                 </span>
               </div>
               <p className="text-xs text-slate-600 font-medium">
-                PRN / Student ID: <span className="font-bold text-slate-800">{myStudent.studentId}</span> • Roll No: <span className="font-bold text-slate-800">{myStudent.rollNumber}</span>
+                PRN / Student ID: <span className="font-bold text-slate-800">{myStudent.studentId || myStudent.id}</span> • Roll No: <span className="font-bold text-slate-800">{myStudent.rollNumber || 'N/A'}</span>
               </p>
               <p className="text-xs text-slate-600">
-                Course: <span className="font-semibold text-slate-800">{myStudent.course}</span> ({myStudent.departmentName}) • Sem {myStudent.semester}, Division {myStudent.division}
+                Course: <span className="font-semibold text-slate-800">{myStudent.course || 'Degree Program'}</span> ({myStudent.departmentName || 'Department'}) • Sem {myStudent.semester || 1}, Division {myStudent.division || 'A'}
               </p>
               <div className="flex items-center gap-4 text-xs pt-1">
-                <span className="text-indigo-600 font-bold">CGPA: {myStudent.overallCgpa || '8.80'}</span>
-                <span className="text-emerald-600 font-bold">Attendance: {myStudent.attendancePercentage}%</span>
-                <span className="text-slate-500">Academic Year: {myStudent.academicYear}</span>
+                <span className="text-indigo-600 font-bold">CGPA: {myStudent.overallCgpa || 'N/A'}</span>
+                <span className="text-emerald-600 font-bold">Attendance: {myStudent.attendancePercentage ?? 100}%</span>
+                <span className="text-slate-500">Academic Year: {myStudent.academicYear || 'Current Year'}</span>
               </div>
             </div>
           </div>
@@ -159,12 +167,12 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                 Personal & Contact Details
               </h3>
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div><span className="text-slate-500 block">Gender:</span><span className="font-bold text-slate-800">{myStudent.gender}</span></div>
-                <div><span className="text-slate-500 block">DOB:</span><span className="font-bold text-slate-800">{myStudent.dob}</span></div>
-                <div><span className="text-slate-500 block">Blood Group:</span><span className="font-bold text-slate-800">{myStudent.bloodGroup}</span></div>
-                <div><span className="text-slate-500 block">Category:</span><span className="font-bold text-slate-800">{myStudent.category}</span></div>
-                <div><span className="text-slate-500 block">Mobile:</span><span className="font-bold text-slate-800">{myStudent.personalMobile}</span></div>
-                <div><span className="text-slate-500 block">Email:</span><span className="font-bold text-slate-800">{myStudent.email}</span></div>
+                <div><span className="text-slate-500 block">Gender:</span><span className="font-bold text-slate-800">{myStudent.gender || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">DOB:</span><span className="font-bold text-slate-800">{myStudent.dob || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">Blood Group:</span><span className="font-bold text-slate-800">{myStudent.bloodGroup || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">Category:</span><span className="font-bold text-slate-800">{myStudent.category || 'General'}</span></div>
+                <div><span className="text-slate-500 block">Mobile:</span><span className="font-bold text-slate-800">{myStudent.personalMobile || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">Email:</span><span className="font-bold text-slate-800">{myStudent.email || 'N/A'}</span></div>
               </div>
             </div>
 
@@ -174,10 +182,10 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                 Parent & Guardian Information
               </h3>
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div><span className="text-slate-500 block">Father Name:</span><span className="font-bold text-slate-800">{myStudent.fatherName || 'Rajesh Sharma'}</span></div>
-                <div><span className="text-slate-500 block">Mother Name:</span><span className="font-bold text-slate-800">{myStudent.motherName || 'Sunita Sharma'}</span></div>
-                <div><span className="text-slate-500 block">Parent Mobile:</span><span className="font-bold text-slate-800">{myStudent.parentMobile || '+91 98221 00112'}</span></div>
-                <div><span className="text-slate-500 block">Parent Email:</span><span className="font-bold text-slate-800">{myStudent.parentEmail || 'parents@gmail.com'}</span></div>
+                <div><span className="text-slate-500 block">Father Name:</span><span className="font-bold text-slate-800">{myStudent.fatherName || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">Mother Name:</span><span className="font-bold text-slate-800">{myStudent.motherName || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">Parent Mobile:</span><span className="font-bold text-slate-800">{myStudent.parentMobile || myStudent.fatherMobile || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">Parent Email:</span><span className="font-bold text-slate-800">{myStudent.parentEmail || 'N/A'}</span></div>
               </div>
             </div>
 
@@ -187,10 +195,10 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                 SSC (Class 10) & HSC (Class 12) Qualifications
               </h3>
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div><span className="text-slate-500 block">SSC Percentage:</span><span className="font-bold text-slate-800">{myStudent.sscPercentage || 88.4}% ({myStudent.sscYear || 2020})</span></div>
-                <div><span className="text-slate-500 block">SSC Board:</span><span className="font-bold text-slate-800">{myStudent.sscBoard || 'Maharashtra State Board'}</span></div>
-                <div><span className="text-slate-500 block">HSC Percentage:</span><span className="font-bold text-slate-800">{myStudent.hscPercentage || 85.2}% ({myStudent.hscYear || 2022})</span></div>
-                <div><span className="text-slate-500 block">HSC Board:</span><span className="font-bold text-slate-800">{myStudent.hscBoard || 'Maharashtra State Board'}</span></div>
+                <div><span className="text-slate-500 block">SSC Percentage:</span><span className="font-bold text-slate-800">{myStudent.sscPercentage || 'N/A'}% ({myStudent.sscYear || myStudent.sscPassingYear || 'N/A'})</span></div>
+                <div><span className="text-slate-500 block">SSC Board:</span><span className="font-bold text-slate-800">{myStudent.sscBoard || 'N/A'}</span></div>
+                <div><span className="text-slate-500 block">HSC Percentage:</span><span className="font-bold text-slate-800">{myStudent.hscPercentage || 'N/A'}% ({myStudent.hscYear || myStudent.hscPassingYear || 'N/A'})</span></div>
+                <div><span className="text-slate-500 block">HSC Board:</span><span className="font-bold text-slate-800">{myStudent.hscBoard || 'N/A'}</span></div>
               </div>
             </div>
 
@@ -203,7 +211,7 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                 <div>
                   <span className="text-slate-500 block mb-1">Skills & Programming:</span>
                   <div className="flex flex-wrap gap-1">
-                    {(myStudent.programmingLanguages || ['Python', 'Java', 'C++', 'SQL', 'React']).map((s, idx) => {
+                    {(myStudent.programmingLanguages || ['Python', 'Java', 'SQL']).map((s, idx) => {
                       const name = typeof s === 'string' ? s : String(s);
                       return (
                         <span key={`lang-${name}-${idx}`} className="px-2 py-0.5 bg-indigo-100 text-indigo-800 font-bold text-[10px] rounded">
@@ -228,8 +236,8 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                         );
                       })
                     ) : (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-[10px] rounded">
-                        AWS Certified Cloud Practitioner
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-medium text-[10px] rounded">
+                        No certifications recorded
                       </span>
                     )}
                   </div>
@@ -254,16 +262,94 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
 
   const canEdit = userRole === 'Admin' || userRole === 'HOD';
 
-  const filtered = studentList.filter((s) => {
-    const matchesDept = selectedDeptFilter === 'ALL' || s.departmentId === selectedDeptFilter || (s.departmentName && s.departmentName.toLowerCase().includes(selectedDeptFilter.toLowerCase()));
-    const matchesProg = selectedProgFilter === 'ALL' || s.programId === selectedProgFilter || (selectedProgFilter === 'prog-ug' && s.course.includes('B.Com')) || (selectedProgFilter === 'prog-pg' && s.course.includes('M.Com')) || (s.programName && s.programName.toLowerCase().includes(selectedProgFilter.toLowerCase())) || (selectedProgFilter === 'Undergraduate' && s.course.includes('B.Com')) || (selectedProgFilter === 'Postgraduate' && s.course.includes('M.Com'));
-    const matchesCourse = selectedCourseFilter === 'ALL' || s.courseId === selectedCourseFilter || s.course.toLowerCase().includes(selectedCourseFilter.toLowerCase()) || (selectedCourseFilter === 'BAF' && (s.course.includes('BAF') || s.course.includes('B.Com')));
-    const matchesSem = selectedSemFilter === 'ALL' || String(s.semester) === selectedSemFilter;
-    const matchesDiv = selectedDivFilter === 'ALL' || s.division === selectedDivFilter;
+  // Dynamic Options for Filters
+  const deptOptions = Array.from(
+    new Set([
+      ...departments.map((d) => d.name),
+      ...studentList.map((s) => s.departmentName).filter(Boolean),
+    ])
+  );
+
+  const progOptions = Array.from(
+    new Set([
+      ...programs.map((p) => p.name),
+      ...studentList.map((s) => s.programName).filter(Boolean),
+      'Undergraduate',
+      'Postgraduate',
+    ])
+  );
+
+  const courseOptions = Array.from(
+    new Set([
+      ...courses.map((c) => c.courseName),
+      ...studentList.map((s) => s.course).filter(Boolean),
+    ])
+  );
+
+  const filtered = (studentList || []).filter((s) => {
+    if (!s) return false;
+
+    const fullName = (s.fullName || '').toLowerCase();
+    const rollNumber = (s.rollNumber || '').toLowerCase();
+    const studentId = (s.studentId || s.id || '').toLowerCase();
+    const deptName = (s.departmentName || '').toLowerCase();
+    const deptId = (s.departmentId || '').toLowerCase();
+    const courseName = (s.course || '').toLowerCase();
+    const courseId = (s.courseId || '').toLowerCase();
+    const progName = (s.programName || '').toLowerCase();
+    const progId = (s.programId || '').toLowerCase();
+    const semStr = String(s.semester ?? 1);
+    const divStr = (s.division || 'A').toUpperCase();
+
+    // Department Match
+    let matchesDept = selectedDeptFilter === 'ALL';
+    if (!matchesDept) {
+      const dTarget = selectedDeptFilter.toLowerCase();
+      matchesDept =
+        deptId === dTarget ||
+        deptName.includes(dTarget) ||
+        dTarget.includes(deptName);
+    }
+
+    // Program Match
+    let matchesProg = selectedProgFilter === 'ALL';
+    if (!matchesProg) {
+      const pTarget = selectedProgFilter.toLowerCase();
+      matchesProg =
+        progId === pTarget ||
+        progName.includes(pTarget) ||
+        pTarget.includes(progName) ||
+        courseName.includes(pTarget) ||
+        (pTarget.includes('undergrad') && (courseName.includes('b.') || courseName.includes('bcom') || courseName.includes('bachelor') || progId.includes('ug') || progName.includes('ug'))) ||
+        (pTarget.includes('postgrad') && (courseName.includes('m.') || courseName.includes('mcom') || courseName.includes('master') || progId.includes('pg') || progName.includes('pg')));
+    }
+
+    // Course Match
+    let matchesCourse = selectedCourseFilter === 'ALL';
+    if (!matchesCourse) {
+      const cTarget = selectedCourseFilter.toLowerCase();
+      matchesCourse =
+        courseId === cTarget ||
+        courseName.includes(cTarget) ||
+        cTarget.includes(courseName);
+    }
+
+    // Semester Match
+    const matchesSem = selectedSemFilter === 'ALL' || semStr === selectedSemFilter;
+
+    // Division Match
+    const matchesDiv = selectedDivFilter === 'ALL' || divStr === selectedDivFilter.toUpperCase();
+
+    // Search Match
+    const q = search.trim().toLowerCase();
     const matchesSearch =
-      s.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      s.rollNumber.toLowerCase().includes(search.toLowerCase()) ||
-      s.studentId.toLowerCase().includes(search.toLowerCase());
+      !q ||
+      fullName.includes(q) ||
+      rollNumber.includes(q) ||
+      studentId.includes(q) ||
+      courseName.includes(q) ||
+      deptName.includes(q);
+
     return matchesDept && matchesProg && matchesCourse && matchesSem && matchesDiv && matchesSearch;
   });
 
@@ -410,8 +496,9 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
               className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
             >
               <option value="ALL">All Departments</option>
-              <option value="Accounting & Finance">Accounting & Finance</option>
-              <option value="Business Analytics">Business Analytics</option>
+              {deptOptions.map((dept) => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
             </select>
           </div>
 
@@ -426,8 +513,9 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
               className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
             >
               <option value="ALL">All Programs</option>
-              <option value="Undergraduate">Undergraduate</option>
-              <option value="Postgraduate">Postgraduate</option>
+              {progOptions.map((prog) => (
+                <option key={prog} value={prog}>{prog}</option>
+              ))}
             </select>
           </div>
 
@@ -439,12 +527,9 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
               className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
             >
               <option value="ALL">All Courses</option>
-              {(selectedProgFilter === 'ALL' || selectedProgFilter === 'Undergraduate') && (
-                <option value="BAF">BAF</option>
-              )}
-              {(selectedProgFilter === 'ALL' || selectedProgFilter === 'Postgraduate') && (
-                <option value="M.Com">M.Com</option>
-              )}
+              {courseOptions.map((crs) => (
+                <option key={crs} value={crs}>{crs}</option>
+              ))}
             </select>
           </div>
 
@@ -456,7 +541,7 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
               className="bg-slate-50 border border-slate-200 rounded-lg p-2 font-semibold text-slate-800"
             >
               <option value="ALL">All Semesters</option>
-              {(selectedCourseFilter === 'M.Com' ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6]).map((sem) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
                 <option key={sem} value={String(sem)}>Semester {sem}</option>
               ))}
             </select>
@@ -493,13 +578,17 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                 )}
 
                 <div className="flex items-start space-x-4">
-                  <img src={s.passportPhoto} className="w-16 h-16 rounded-2xl object-cover ring-2 ring-indigo-100 shrink-0" alt="" />
+                  <img
+                    src={s.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
+                    className="w-16 h-16 rounded-2xl object-cover ring-2 ring-indigo-100 shrink-0"
+                    alt={s.fullName || 'Student'}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 truncate">{s.fullName}</span>
+                      <span className="text-xs font-bold text-slate-900 truncate">{s.fullName || 'Unnamed Student'}</span>
                       <div className="flex items-center space-x-1.5 shrink-0">
                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
-                          {s.rollNumber}
+                          {s.rollNumber || 'N/A'}
                         </span>
                         {canEdit && (
                           <div className="flex space-x-1">
@@ -524,14 +613,21 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-slate-500 mt-0.5">{s.course}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{s.course || 'Degree Program'}</p>
                     <p className="text-[11px] text-slate-600 font-medium">
-                      {s.departmentName} • Sem {s.semester}-{s.division}
+                      {s.departmentName || 'Department'} • Sem {s.semester || 1}-{s.division || 'A'}
                     </p>
 
                     <div className="flex items-center space-x-3 mt-2 text-[11px]">
-                      <span>Att: <strong className={s.attendancePercentage >= 75 ? 'text-emerald-600' : 'text-rose-600'}>{s.attendancePercentage}%</strong></span>
-                      <span>CGPA: <strong className="text-indigo-600">{s.overallCgpa}</strong></span>
+                      <span>
+                        Att:{' '}
+                        <strong className={(s.attendancePercentage ?? 100) >= 75 ? 'text-emerald-600' : 'text-rose-600'}>
+                          {s.attendancePercentage ?? 100}%
+                        </strong>
+                      </span>
+                      <span>
+                        CGPA: <strong className="text-indigo-600">{s.overallCgpa || 'N/A'}</strong>
+                      </span>
                     </div>
                   </div>
                 </div>

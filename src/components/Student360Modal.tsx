@@ -219,17 +219,17 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
           <div className="flex flex-col md:flex-row items-center md:items-start space-y-4 md:space-y-0 md:space-x-6">
             <img
               src={student.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
-              alt={student.fullName}
+              alt={student.fullName || 'Student'}
               className="w-24 h-24 rounded-2xl object-cover border-4 border-white/20 shadow-xl shrink-0"
             />
             <div className="text-center md:text-left flex-1">
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <h2 className="text-2xl font-bold text-white">{student.fullName}</h2>
+                <h2 className="text-2xl font-bold text-white">{student.fullName || 'Student Profile'}</h2>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                  Roll: {student.rollNumber}
+                  Roll: {student.rollNumber || 'N/A'}
                 </span>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white/10 text-slate-200 border border-white/20">
-                  PRN: {student.studentId}
+                  PRN: {student.studentId || student.id}
                 </span>
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                   student.academicStatus === 'Pass Out' || student.academicStatus === 'Alumni'
@@ -241,14 +241,14 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
               </div>
 
               <p className="text-sm text-slate-300 mt-1">
-                {student.course} • {student.departmentName} (Sem {student.semester} - Div {student.division})
+                {student.course || 'Degree Program'} • {student.departmentName || 'Department'} (Sem {student.semester || 1} - Div {student.division || 'A'})
               </p>
 
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mt-3 text-xs text-slate-300">
-                <span>ABC ID: <strong className="text-white font-mono">{student.abcId || 'ABC-8921-3301-4490'}</strong></span>
-                <span>Aadhaar: <strong className="text-white font-mono">{student.aadhaarNumber || '9821-4402-1198'}</strong></span>
-                <span>Blood Group: <strong className="text-white">{student.bloodGroup}</strong></span>
-                <span>Category: <strong className="text-white">{student.category}</strong></span>
+                <span>ABC ID: <strong className="text-white font-mono">{student.abcId || 'N/A'}</strong></span>
+                <span>Aadhaar: <strong className="text-white font-mono">{student.aadhaarNumber || 'N/A'}</strong></span>
+                <span>Blood Group: <strong className="text-white">{student.bloodGroup || 'N/A'}</strong></span>
+                <span>Category: <strong className="text-white">{student.category || 'General'}</strong></span>
               </div>
             </div>
 
@@ -256,11 +256,11 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
             <div className="flex flex-col items-end gap-2 shrink-0">
               <div className="text-center bg-white/10 p-3 rounded-xl border border-white/10 min-w-[130px]">
                 <p className="text-[10px] text-slate-300 uppercase tracking-wider font-semibold">Attendance</p>
-                <p className={`text-2xl font-bold ${student.attendancePercentage >= 75 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {student.attendancePercentage}%
+                <p className={`text-2xl font-bold ${(student.attendancePercentage ?? 100) >= 75 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {student.attendancePercentage ?? 100}%
                 </p>
                 <p className="text-[10px] text-slate-300 mt-0.5">
-                  {student.attendedLectures} / {student.totalLectures} Lectures
+                  {student.attendedLectures ?? 0} / {student.totalLectures ?? 0} Lectures
                 </p>
               </div>
 
