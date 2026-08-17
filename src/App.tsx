@@ -766,62 +766,90 @@ export default function App() {
   const handleImportStudentsBatch = async (newStudents: Partial<Student360Profile>[]) => {
     const DEFAULT_STUDENT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
 
-    const formatted: Student360Profile[] = newStudents.map((s, idx) => ({
-      id: `stu-imp-${Date.now()}-${idx}`,
-      studentId: s.studentId || `STU${Date.now() + idx}`,
-      fullName: s.fullName || 'Student',
-      email: s.email || 'student@cktcollege.edu.in',
-      personalMobile: s.personalMobile || '9820000000',
-      whatsappNumber: s.whatsappNumber || '9820000000',
-      departmentId: s.departmentId || 'dept-af',
-      departmentName: s.departmentName || 'Department of Accounting & Finance',
-      course: s.course || 'B.Com (Accounting & Finance)',
-      academicYear: s.academicYear || 'TY',
-      semester: s.semester || 5,
-      division: s.division || 'A',
-      rollNumber: s.rollNumber || `26BA0${idx + 1}`,
-      gender: (s.gender as any) || 'Male',
-      dob: s.dob || '2004-01-01',
-      academicStatus: 'Active',
-      admissionDate: s.admissionDate || '2024-06-01',
-      bloodGroup: 'B+',
-      category: 'General',
-      fatherName: s.fatherName || 'Father',
-      motherName: s.motherName || 'Mother',
-      guardianName: s.guardianName || 'N/A',
-      parentMobile: s.parentMobile || '9820000000',
-      parentEmail: s.parentEmail || 'parent@gmail.com',
-      parentOccupation: 'Service',
-      emergencyContact: '+91 9820000000',
-      temporaryAddress: 'Navi Mumbai, Maharashtra',
-      permanentAddress: 'Navi Mumbai, Maharashtra',
-      sscSchoolName: 'High School',
-      sscBoard: 'CBSE',
-      sscPassingYear: '2020',
-      sscPercentage: 85,
-      hscCollegeName: 'Junior College',
-      hscBoard: 'HSC',
-      hscStream: 'Commerce',
-      hscPassingYear: '2022',
-      hscPercentage: 82,
-      sem1Gpa: 8.2,
-      sem2Gpa: 8.4,
-      sem3Gpa: 8.5,
-      sem4Gpa: 8.6,
-      overallCgpa: 8.4,
-      technicalSkills: ['Tally Prime', 'Excel'],
-      programmingLanguages: ['SQL'],
-      certifications: [],
-      internships: [],
-      projects: [],
-      sportsAndExtra: [],
-      attendancePercentage: 100,
-      totalLectures: 0,
-      attendedLectures: 0,
-      passportPhoto: DEFAULT_STUDENT_AVATAR,
-    }));
+    const formatted: Student360Profile[] = newStudents.map((s, idx) => {
+      // Find matching department from departments list if available
+      const deptMatch = departments.find(
+        (d) =>
+          (s.departmentId && d.id === s.departmentId) ||
+          (s.departmentName && d.name.toLowerCase().includes(s.departmentName.toLowerCase())) ||
+          (s.departmentName && s.departmentName.toLowerCase().includes(d.name.toLowerCase()))
+      );
+      const targetDeptId = deptMatch ? deptMatch.id : (s.departmentId || departments[0]?.id || 'dept-af');
+      const targetDeptName = s.departmentName || deptMatch?.name || 'Department of Accounting & Finance';
 
-    setStudents((prev) => [...prev, ...formatted]);
+      const uniqueId = s.id || `stu-imp-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+      const uniqueStudentCode = (s.studentId && s.studentId.length > 2 && s.studentId !== 'STU001')
+        ? s.studentId
+        : `STU${Date.now().toString().slice(-4)}${idx + 1}`;
+
+      return {
+        ...s,
+        id: uniqueId,
+        studentId: uniqueStudentCode,
+        fullName: s.fullName || 'Student',
+        email: s.email || `${(s.rollNumber || `stu${idx}`).toLowerCase().replace(/[^a-z0-9]/g, '')}@cktcollege.edu.in`,
+        personalMobile: s.personalMobile || '9820000000',
+        whatsappNumber: s.whatsappNumber || s.personalMobile || '9820000000',
+        departmentId: targetDeptId,
+        departmentName: targetDeptName,
+        course: s.course || 'B.Com (Accounting & Finance)',
+        academicYear: s.academicYear || 'TY',
+        semester: s.semester ?? 5,
+        division: s.division || 'A',
+        rollNumber: s.rollNumber || `${idx + 1}`,
+        gender: (s.gender as any) || 'Male',
+        dob: s.dob || '2004-01-01',
+        academicStatus: s.academicStatus || 'Active',
+        admissionDate: s.admissionDate || new Date().toISOString().split('T')[0],
+        bloodGroup: s.bloodGroup || 'B+',
+        category: (s.category as any) || 'General',
+        fatherName: s.fatherName || '',
+        motherName: s.motherName || '',
+        guardianName: s.guardianName || 'N/A',
+        parentMobile: s.parentMobile || s.personalMobile || '9820000000',
+        parentEmail: s.parentEmail || s.email || 'parent@gmail.com',
+        parentOccupation: s.parentOccupation || 'Service',
+        annualIncome: s.annualIncome || 'N/A',
+        emergencyContact: s.emergencyContact || s.personalMobile || '+91 9820000000',
+        temporaryAddress: s.temporaryAddress || s.permanentAddress || 'Navi Mumbai, Maharashtra',
+        permanentAddress: s.permanentAddress || 'Navi Mumbai, Maharashtra',
+        sscSchoolName: s.sscSchoolName || 'High School',
+        sscBoard: s.sscBoard || 'State Board',
+        sscPassingYear: s.sscPassingYear || '2020',
+        sscPercentage: s.sscPercentage ?? 85,
+        hscCollegeName: s.hscCollegeName || 'Junior College',
+        hscBoard: s.hscBoard || 'HSC',
+        hscStream: s.hscStream || 'Commerce',
+        hscPassingYear: s.hscPassingYear || '2022',
+        hscPercentage: s.hscPercentage ?? 82,
+        sem1Gpa: s.sem1Gpa ?? 8.2,
+        sem2Gpa: s.sem2Gpa ?? 8.4,
+        sem3Gpa: s.sem3Gpa ?? 8.5,
+        sem4Gpa: s.sem4Gpa ?? 8.6,
+        sem5Gpa: s.sem5Gpa ?? 8.8,
+        sem6Gpa: s.sem6Gpa ?? 9.0,
+        overallCgpa: s.overallCgpa ?? 8.4,
+        technicalSkills: s.technicalSkills || ['Excel'],
+        programmingLanguages: s.programmingLanguages || ['SQL'],
+        departmentActivities: s.departmentActivities || [],
+        certifications: s.certifications || [],
+        internships: s.internships || [],
+        projects: s.projects || [],
+        sportsAndExtra: s.sportsAndExtra || [],
+        aadhaarNumber: s.aadhaarNumber || '',
+        abcId: s.abcId || '',
+        attendancePercentage: s.attendancePercentage ?? 100,
+        totalLectures: s.totalLectures ?? 0,
+        attendedLectures: s.attendedLectures ?? 0,
+        passportPhoto: s.passportPhoto || DEFAULT_STUDENT_AVATAR,
+      };
+    });
+
+    setStudents((prev) => {
+      const existingKeySet = new Set(prev.map((p) => p.id));
+      const filteredNew = formatted.filter((f) => !existingKeySet.has(f.id));
+      return [...prev, ...filteredNew];
+    });
     
     // Create corresponding user credentials for imported students using default placeholder avatar
     const studentUsers: User[] = formatted.map((s) => ({
@@ -838,7 +866,11 @@ export default function App() {
       createdAt: new Date().toISOString().split('T')[0],
     }));
 
-    setUsersList((prev) => [...prev, ...studentUsers]);
+    setUsersList((prev) => {
+      const existingUserSet = new Set(prev.map((u) => u.id));
+      const filteredNewUsers = studentUsers.filter((u) => !existingUserSet.has(u.id));
+      return [...prev, ...filteredNewUsers];
+    });
 
     // Send student records and user credentials batch to server API
     try {

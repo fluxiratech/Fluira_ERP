@@ -1358,13 +1358,16 @@ export async function insertStudent(st: Student360Profile): Promise<Student360Pr
 export async function upsertStudent(st: Student360Profile): Promise<Student360Profile> {
   try {
     const payload = mapStudentToSql(st);
-    const existing = await db.select().from(schema.students).where(
-      or(
-        eq(schema.students.id, st.id),
-        eq(schema.students.studentId, st.studentId),
-        eq(schema.students.rollNumber, st.rollNumber)
-      )
-    );
+    
+    // Check if provided departmentId exists in schema.departments
+    if (payload.departmentId) {
+      const deptExists = await db.select().from(schema.departments).where(eq(schema.departments.id, payload.departmentId));
+      if (deptExists.length === 0) {
+        payload.departmentId = null;
+      }
+    }
+
+    const existing = await db.select().from(schema.students).where(eq(schema.students.id, st.id));
     if (existing.length > 0) {
       await db.update(schema.students).set(payload).where(eq(schema.students.id, existing[0].id));
     } else {
@@ -1379,13 +1382,7 @@ export async function upsertStudent(st: Student360Profile): Promise<Student360Pr
         courseId: null,
         programId: null,
       };
-      const existing = await db.select().from(schema.students).where(
-        or(
-          eq(schema.students.id, st.id),
-          eq(schema.students.studentId, st.studentId),
-          eq(schema.students.rollNumber, st.rollNumber)
-        )
-      );
+      const existing = await db.select().from(schema.students).where(eq(schema.students.id, st.id));
       if (existing.length > 0) {
         await db.update(schema.students).set(safePayload).where(eq(schema.students.id, existing[0].id));
       } else {

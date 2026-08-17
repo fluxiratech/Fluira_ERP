@@ -482,32 +482,38 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
     const headerCols = parseCSVLine(lines[0]).map((h) => h.toLowerCase().trim());
 
     const getVal = (cols: string[], possibleHeaders: string[], fallbackIdx: number, defaultVal: string = ''): string => {
-      for (const h of possibleHeaders) {
-        const idx = headerCols.findIndex((hdr) => hdr.includes(h.toLowerCase()));
-        if (idx !== -1 && cols[idx] !== undefined) {
-          return cols[idx].trim();
+      if (headerCols.length > 0) {
+        for (const h of possibleHeaders) {
+          const idx = headerCols.findIndex((hdr) => hdr.includes(h.toLowerCase()));
+          if (idx !== -1 && cols[idx] !== undefined && cols[idx].trim() !== '') {
+            return cols[idx].trim();
+          }
         }
       }
-      return cols[fallbackIdx] !== undefined ? cols[fallbackIdx].trim() : defaultVal;
+      if (headerCols.length === 0 && fallbackIdx >= 0 && cols[fallbackIdx] !== undefined && cols[fallbackIdx].trim() !== '') {
+        return cols[fallbackIdx].trim();
+      }
+      return defaultVal;
     };
 
     const rows: ParsedStudentRow[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const cols = parseCSVLine(lines[i]);
-      if (cols.length < 3) continue;
+      if (cols.length < 2) continue;
 
-      const prn = getVal(cols, ['prn', 'student id', 'student_id'], 0);
-      const name = getVal(cols, ['full name', 'fullname', 'name', 'student name'], 1);
-      const email = getVal(cols, ['email', 'email address'], 2);
-      const mobile = getVal(cols, ['mobile', 'phone', 'personal mobile'], 3);
-      const whatsapp = getVal(cols, ['whatsapp'], 4, mobile);
-      const dept = getVal(cols, ['department', 'dept'], 5, 'Commerce & Management');
-      const course = getVal(cols, ['course', 'program'], 6, 'B.Com (Accounting & Finance)');
-      const year = getVal(cols, ['academic year', 'year'], 7, 'TY');
-      const sem = parseInt(getVal(cols, ['semester', 'sem'], 8, '5'), 10) || 5;
-      const div = getVal(cols, ['division', 'div'], 9, 'A');
-      const roll = getVal(cols, ['roll number', 'roll', 'rollno'], 10, `26BA0${i}`);
+      const rawPrn = getVal(cols, ['prn', 'student id', 'student_id', 'student_code', 'enrollment'], -1, '');
+      const prn = rawPrn || `STU${1000 + i}`;
+      const name = getVal(cols, ['full name', 'fullname', 'name', 'student name', 'student_name'], 0, `Student ${i}`);
+      const email = getVal(cols, ['email', 'email address', 'email_id', 'mail'], 1, `student${i}@cktcollege.edu.in`);
+      const mobile = getVal(cols, ['mobile', 'phone', 'personal mobile', 'contact'], 2, '9820000000');
+      const whatsapp = getVal(cols, ['whatsapp'], 3, mobile);
+      const dept = getVal(cols, ['department', 'dept', 'branch', 'stream'], 4, 'Department of Accounting & Finance');
+      const course = getVal(cols, ['course', 'program', 'degree'], 5, 'B.Com (Accounting & Finance)');
+      const year = getVal(cols, ['academic year', 'year'], 6, 'TY');
+      const sem = parseInt(getVal(cols, ['semester', 'sem'], 7, '5'), 10) || 5;
+      const div = getVal(cols, ['division', 'div', 'section'], 8, 'A');
+      const roll = getVal(cols, ['roll number', 'roll', 'rollno', 'roll_no', 'roll no'], 9, `${i}`);
       const gender = getVal(cols, ['gender', 'sex'], 11, 'Male');
       const dob = getVal(cols, ['dob', 'date of birth'], 12, '2004-05-15');
       const bloodGroup = getVal(cols, ['blood group', 'bloodgroup', 'blood'], 13, 'B+');
