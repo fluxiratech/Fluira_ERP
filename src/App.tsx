@@ -1609,6 +1609,11 @@ export default function App() {
         onAddUser={handleAddUser}
         onDeleteUser={handleDeleteUser}
         onLogout={handleLogout}
+        importLogs={importLogs}
+        onNavigateToBulkUpload={() => {
+          setShowSettingsModal(false);
+          setActiveTab('bulk-upload');
+        }}
       />
 
     </div>

@@ -1,5 +1,5 @@
 import { eq, desc, and, or } from 'drizzle-orm';
-import { db } from './index';
+import { db, pool } from './index';
 import * as schema from './schema';
 import {
   User,
@@ -267,6 +267,460 @@ export function mapFacultyToSql(fac: Faculty): any {
 export async function initializeDatabase(seedData?: any) {
   try {
     console.log('[Cloud SQL] Initializing and verifying SQL database tables...');
+
+    // Execute raw DDL statements to guarantee that all PostgreSQL tables exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS programs (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Active',
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS departments (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        hod_id TEXT,
+        hod_name TEXT,
+        established_year INTEGER,
+        total_students INTEGER DEFAULT 0,
+        total_faculty INTEGER DEFAULT 0,
+        avg_attendance_pct DOUBLE PRECISION DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        role TEXT NOT NULL,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name TEXT,
+        phone TEXT,
+        avatar TEXT,
+        password TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        last_login TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS courses (
+        id TEXT PRIMARY KEY,
+        program_id TEXT NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+        program_name TEXT,
+        course_name TEXT NOT NULL,
+        course_code TEXT NOT NULL,
+        duration_years INTEGER DEFAULT 3,
+        total_semesters INTEGER DEFAULT 6,
+        status TEXT NOT NULL DEFAULT 'Active',
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        code TEXT,
+        name TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS faculty_list (
+        id TEXT PRIMARY KEY,
+        faculty_id TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        mobile TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name TEXT,
+        designation TEXT,
+        qualification TEXT,
+        experience_years INTEGER DEFAULT 0,
+        photo TEXT,
+        allocated_subjects TEXT,
+        is_class_teacher_of TEXT,
+        weekly_workload_hours DOUBLE PRECISION DEFAULT 0,
+        is_active BOOLEAN NOT NULL DEFAULT true
+      );
+
+      CREATE TABLE IF NOT EXISTS subjects (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        name TEXT NOT NULL,
+        department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+        program_id TEXT REFERENCES programs(id) ON DELETE SET NULL,
+        program_name TEXT,
+        course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
+        course_code TEXT,
+        semester INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        credits INTEGER NOT NULL,
+        assigned_faculty_id TEXT REFERENCES faculty_list(id) ON DELETE SET NULL,
+        assigned_faculty_name TEXT,
+        status TEXT DEFAULT 'Active'
+      );
+
+      CREATE TABLE IF NOT EXISTS students (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL,
+        roll_number TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        gender TEXT,
+        dob TEXT,
+        admission_date TEXT,
+        passport_photo TEXT,
+        blood_group TEXT,
+        category TEXT,
+        course TEXT,
+        program_id TEXT REFERENCES programs(id) ON DELETE SET NULL,
+        program_name TEXT,
+        course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
+        course_code TEXT,
+        academic_year_code TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name TEXT,
+        semester INTEGER NOT NULL,
+        division TEXT NOT NULL,
+        academic_year TEXT,
+        personal_mobile TEXT,
+        whatsapp_number TEXT,
+        email TEXT,
+        emergency_contact TEXT,
+        permanent_address TEXT,
+        temporary_address TEXT,
+        father_name TEXT,
+        mother_name TEXT,
+        guardian_name TEXT,
+        parent_mobile TEXT,
+        parent_email TEXT,
+        parent_occupation TEXT,
+        ssc_school_name TEXT,
+        ssc_board TEXT,
+        ssc_passing_year TEXT,
+        ssc_percentage DOUBLE PRECISION,
+        hsc_college_name TEXT,
+        hsc_board TEXT,
+        hsc_stream TEXT,
+        hsc_passing_year TEXT,
+        hsc_percentage DOUBLE PRECISION,
+        academic_performance TEXT,
+        sem1_gpa DOUBLE PRECISION,
+        sem2_gpa DOUBLE PRECISION,
+        sem3_gpa DOUBLE PRECISION,
+        sem4_gpa DOUBLE PRECISION,
+        sem5_gpa DOUBLE PRECISION,
+        sem6_gpa DOUBLE PRECISION,
+        overall_cgpa DOUBLE PRECISION,
+        technical_skills TEXT,
+        programming_languages TEXT,
+        certifications TEXT,
+        internships TEXT,
+        projects TEXT,
+        sports_and_extra TEXT,
+        prn_number TEXT,
+        year TEXT,
+        ssc_year TEXT,
+        hsc_year TEXT,
+        father_mobile TEXT,
+        mother_mobile TEXT,
+        abc_id TEXT,
+        aadhaar_number TEXT,
+        academic_status TEXT,
+        batch TEXT,
+        annual_income TEXT,
+        total_lectures INTEGER DEFAULT 0,
+        attended_lectures INTEGER DEFAULT 0,
+        attendance_percentage DOUBLE PRECISION DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS timetable (
+        id TEXT PRIMARY KEY,
+        department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+        program_id TEXT REFERENCES programs(id) ON DELETE SET NULL,
+        program_name TEXT,
+        course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
+        course_name TEXT,
+        semester INTEGER NOT NULL,
+        division TEXT NOT NULL,
+        day TEXT NOT NULL,
+        time_slot TEXT NOT NULL,
+        subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        subject_name TEXT NOT NULL,
+        faculty_id TEXT NOT NULL REFERENCES faculty_list(id) ON DELETE CASCADE,
+        faculty_name TEXT NOT NULL,
+        classroom TEXT NOT NULL,
+        type TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        date TEXT NOT NULL,
+        department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+        program_id TEXT REFERENCES programs(id) ON DELETE SET NULL,
+        program_name TEXT,
+        course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
+        course_name TEXT,
+        semester INTEGER NOT NULL,
+        division TEXT NOT NULL,
+        subject_id TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+        subject_name TEXT NOT NULL,
+        faculty_id TEXT NOT NULL REFERENCES faculty_list(id) ON DELETE CASCADE,
+        faculty_name TEXT NOT NULL,
+        session_type TEXT NOT NULL,
+        time_slot TEXT NOT NULL,
+        classroom TEXT NOT NULL,
+        is_locked BOOLEAN NOT NULL DEFAULT false,
+        total_students INTEGER DEFAULT 0,
+        present_count INTEGER DEFAULT 0,
+        absent_count INTEGER DEFAULT 0,
+        late_count INTEGER DEFAULT 0,
+        on_leave_count INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS attendance_records (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        student_roll TEXT,
+        student_name TEXT,
+        status TEXT NOT NULL,
+        remarks TEXT,
+        marked_at TEXT,
+        marked_by TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS leaves (
+        id TEXT PRIMARY KEY,
+        applicant_id TEXT NOT NULL,
+        applicant_name TEXT NOT NULL,
+        applicant_role TEXT NOT NULL,
+        applicant_roll_or_id TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        leave_type TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        total_days INTEGER DEFAULT 1,
+        reason TEXT,
+        medical_doc_url TEXT,
+        status TEXT NOT NULL,
+        faculty_remarks TEXT,
+        hod_remarks TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS corrections (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        student_name TEXT NOT NULL,
+        roll_number TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        date TEXT NOT NULL,
+        subject_name TEXT NOT NULL,
+        current_status TEXT NOT NULL,
+        requested_status TEXT NOT NULL,
+        reason TEXT,
+        status TEXT NOT NULL,
+        applied_at TEXT,
+        reviewed_by TEXT,
+        reviewed_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS results (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        student_name TEXT NOT NULL,
+        roll_number TEXT,
+        semester INTEGER NOT NULL,
+        subject_id TEXT REFERENCES subjects(id) ON DELETE SET NULL,
+        subject_code TEXT,
+        subject_name TEXT NOT NULL,
+        internal_marks DOUBLE PRECISION DEFAULT 0,
+        external_marks DOUBLE PRECISION DEFAULT 0,
+        total_marks DOUBLE PRECISION DEFAULT 0,
+        grade TEXT,
+        gpa DOUBLE PRECISION
+      );
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        role TEXT,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        type TEXT NOT NULL,
+        is_read BOOLEAN NOT NULL DEFAULT false,
+        created_at TEXT NOT NULL,
+        action_url TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        timestamp TEXT NOT NULL,
+        actor_name TEXT,
+        actor_role TEXT,
+        action TEXT NOT NULL,
+        category TEXT NOT NULL,
+        details TEXT NOT NULL,
+        ip_address TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS atkt_records (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        student_name TEXT NOT NULL,
+        roll_number TEXT,
+        prn_number TEXT,
+        course TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name TEXT,
+        semester INTEGER NOT NULL,
+        subject_code TEXT,
+        subject_name TEXT NOT NULL,
+        backlog_type TEXT,
+        original_internal_marks DOUBLE PRECISION,
+        original_external_marks DOUBLE PRECISION,
+        attempts_count INTEGER DEFAULT 1,
+        status TEXT NOT NULL,
+        exam_fee_paid BOOLEAN DEFAULT false,
+        exam_fee_amount DOUBLE PRECISION DEFAULT 0,
+        re_exam_date TEXT,
+        re_exam_marks_obtained DOUBLE PRECISION,
+        cleared_at TEXT,
+        remarks TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS academic_events (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        category TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        is_non_working_day BOOLEAN NOT NULL DEFAULT true,
+        description TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name TEXT,
+        created_by TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS notices (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        category TEXT NOT NULL,
+        published_by TEXT,
+        published_role TEXT,
+        created_at TEXT,
+        scheduled_at TEXT,
+        is_pinned BOOLEAN DEFAULT false,
+        is_archived BOOLEAN DEFAULT false,
+        target_program TEXT,
+        target_course TEXT,
+        target_academic_year TEXT,
+        target_semester INTEGER,
+        target_division TEXT,
+        attachment_url TEXT,
+        attachment_name TEXT,
+        sent_channels TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS department_activities (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        date TEXT NOT NULL,
+        organizer TEXT,
+        role_or_position TEXT,
+        description TEXT,
+        photo_url TEXT,
+        certificate_url TEXT,
+        department_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+        department_name TEXT,
+        venue TEXT,
+        speaker_or_guest TEXT,
+        target_audience TEXT,
+        participants_count INTEGER DEFAULT 0,
+        academic_year TEXT,
+        status TEXT,
+        key_outcomes TEXT,
+        student_participants TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_conversations (
+        id TEXT PRIMARY KEY,
+        participant_id TEXT NOT NULL,
+        participant_name TEXT NOT NULL,
+        participant_role TEXT NOT NULL,
+        participant_avatar TEXT,
+        participant_status TEXT DEFAULT 'Offline',
+        last_message TEXT,
+        last_message_time TEXT,
+        unread_count INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+        sender_id TEXT NOT NULL,
+        sender_name TEXT NOT NULL,
+        sender_role TEXT NOT NULL,
+        sender_avatar TEXT,
+        text TEXT NOT NULL,
+        attachment_url TEXT,
+        attachment_type TEXT,
+        created_at TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT false
+      );
+
+      CREATE TABLE IF NOT EXISTS import_logs (
+        id TEXT PRIMARY KEY,
+        file_name TEXT NOT NULL,
+        uploaded_at TEXT NOT NULL,
+        uploaded_by TEXT NOT NULL,
+        total_records INTEGER DEFAULT 0,
+        imported_count INTEGER DEFAULT 0,
+        updated_count INTEGER DEFAULT 0,
+        skipped_count INTEGER DEFAULT 0,
+        status TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS promotion_history (
+        id TEXT PRIMARY KEY,
+        batch_name TEXT NOT NULL,
+        promoted_at TEXT NOT NULL,
+        promoted_by TEXT NOT NULL,
+        program TEXT NOT NULL,
+        course TEXT NOT NULL,
+        from_semester INTEGER NOT NULL,
+        to_semester INTEGER NOT NULL,
+        total_students_promoted INTEGER DEFAULT 0,
+        status TEXT NOT NULL,
+        records TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS class_teacher_assignments (
+        id TEXT PRIMARY KEY,
+        department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+        department_name TEXT NOT NULL,
+        course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+        course_code TEXT NOT NULL,
+        course_name TEXT NOT NULL,
+        academic_year TEXT NOT NULL,
+        semester INTEGER NOT NULL,
+        division TEXT NOT NULL,
+        class_teacher_id TEXT NOT NULL REFERENCES faculty_list(id) ON DELETE CASCADE,
+        class_teacher_name TEXT NOT NULL,
+        assistant_teacher_id TEXT REFERENCES faculty_list(id) ON DELETE SET NULL,
+        assistant_teacher_name TEXT,
+        classroom TEXT NOT NULL,
+        academic_session TEXT NOT NULL,
+        assigned_at TEXT NOT NULL,
+        assigned_by TEXT NOT NULL
+      );
+    `);
 
     // 1. Users
     const existingUsers = await db.select().from(schema.users);
@@ -594,6 +1048,112 @@ export async function initializeDatabase(seedData?: any) {
           category: log.category,
           details: log.details,
           ipAddress: log.ipAddress || null,
+        }).onConflictDoNothing();
+      }
+    }
+
+    // 16. Chat Conversations & Messages
+    const existingChatConvs = await db.select().from(schema.chatConversations);
+    if (existingChatConvs.length === 0) {
+      const convsToInsert = (seedData?.chatConversations && seedData.chatConversations.length > 0) ? seedData.chatConversations : INITIAL_CHAT_CONVERSATIONS;
+      for (const conv of convsToInsert) {
+        await db.insert(schema.chatConversations).values({
+          id: conv.id,
+          participantId: conv.participantId,
+          participantName: conv.participantName,
+          participantRole: conv.participantRole,
+          participantAvatar: conv.participantAvatar || null,
+          participantStatus: conv.participantStatus || 'Offline',
+          lastMessage: conv.lastMessage || null,
+          lastMessageTime: conv.lastMessageTime || null,
+          unreadCount: conv.unreadCount || 0,
+        }).onConflictDoNothing();
+      }
+    }
+
+    const existingChatMsgs = await db.select().from(schema.chatMessages);
+    if (existingChatMsgs.length === 0) {
+      const msgsToInsert = (seedData?.chatMessages && seedData.chatMessages.length > 0) ? seedData.chatMessages : INITIAL_CHAT_MESSAGES;
+      for (const msg of msgsToInsert) {
+        await db.insert(schema.chatMessages).values({
+          id: msg.id,
+          conversationId: msg.conversationId,
+          senderId: msg.senderId,
+          senderName: msg.senderName,
+          senderRole: msg.senderRole,
+          senderAvatar: msg.senderAvatar || null,
+          text: msg.text,
+          attachmentUrl: msg.attachmentUrl || null,
+          attachmentType: msg.attachmentType || null,
+          createdAt: msg.createdAt,
+          isRead: msg.isRead || false,
+        }).onConflictDoNothing();
+      }
+    }
+
+    // 17. Import Logs
+    const existingImportLogs = await db.select().from(schema.importLogs);
+    if (existingImportLogs.length === 0) {
+      const importsToInsert = (seedData?.importLogs && seedData.importLogs.length > 0) ? seedData.importLogs : INITIAL_IMPORT_LOGS;
+      for (const imp of importsToInsert) {
+        await db.insert(schema.importLogs).values({
+          id: imp.id,
+          fileName: imp.fileName,
+          uploadedAt: imp.uploadedAt,
+          uploadedBy: imp.uploadedBy,
+          totalRecords: imp.totalRecords || 0,
+          importedCount: imp.importedCount || 0,
+          updatedCount: imp.updatedCount || 0,
+          skippedCount: imp.skippedCount || 0,
+          status: imp.status,
+        }).onConflictDoNothing();
+      }
+    }
+
+    // 18. Promotion History
+    const existingPromos = await db.select().from(schema.promotionHistory);
+    if (existingPromos.length === 0) {
+      const promosToInsert = (seedData?.promotionHistory && seedData.promotionHistory.length > 0) ? seedData.promotionHistory : INITIAL_PROMOTION_HISTORY;
+      for (const promo of promosToInsert) {
+        await db.insert(schema.promotionHistory).values({
+          id: promo.id,
+          batchName: promo.batchName,
+          promotedAt: promo.promotedAt,
+          promotedBy: promo.promotedBy,
+          program: promo.program,
+          course: promo.course,
+          fromSemester: promo.fromSemester,
+          toSemester: promo.toSemester,
+          totalStudentsPromoted: promo.totalStudentsPromoted || 0,
+          status: promo.status,
+          records: promo.records ? JSON.stringify(promo.records) : null,
+        }).onConflictDoNothing();
+      }
+    }
+
+    // 19. Class Teacher Assignments
+    const existingClassTeachers = await db.select().from(schema.classTeacherAssignments);
+    if (existingClassTeachers.length === 0) {
+      const ctToInsert = (seedData?.classTeachers && seedData.classTeachers.length > 0) ? seedData.classTeachers : INITIAL_CLASS_TEACHERS;
+      for (const ct of ctToInsert) {
+        await db.insert(schema.classTeacherAssignments).values({
+          id: ct.id,
+          departmentId: ct.departmentId,
+          departmentName: ct.departmentName,
+          courseId: ct.courseId,
+          courseCode: ct.courseCode,
+          courseName: ct.courseName,
+          academicYear: ct.academicYear,
+          semester: ct.semester,
+          division: ct.division,
+          classTeacherId: ct.classTeacherId,
+          classTeacherName: ct.classTeacherName,
+          assistantTeacherId: ct.assistantTeacherId || null,
+          assistantTeacherName: ct.assistantTeacherName || null,
+          classroom: ct.classroom,
+          academicSession: ct.academicSession,
+          assignedAt: ct.assignedAt,
+          assignedBy: ct.assignedBy,
         }).onConflictDoNothing();
       }
     }

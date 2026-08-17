@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CollegeSettings, User, Role } from '../types';
+import { CollegeSettings, User, Role, ImportHistoryLog } from '../types';
 import { convertFileToJPGDataUrl } from '../utils/imageUtils';
 import {
   Settings,
@@ -32,6 +32,11 @@ import {
   Server,
   RefreshCw,
   FileText,
+  FileSpreadsheet,
+  Filter,
+  ArrowUpRight,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -46,6 +51,8 @@ interface SettingsModalProps {
   onUpdateUser?: (user: User) => void;
   onAddUser?: (user: User) => void;
   onDeleteUser?: (id: string) => void;
+  importLogs?: ImportHistoryLog[];
+  onNavigateToBulkUpload?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -60,11 +67,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateUser,
   onAddUser,
   onDeleteUser,
+  importLogs = [],
+  onNavigateToBulkUpload,
 }) => {
   if (!isOpen) return null;
 
-  const [activeTab, setActiveTab] = useState<'settings' | 'users'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'users' | 'imports'>('settings');
   const [sysSubTab, setSysSubTab] = useState<'general' | 'backup' | 'email' | 'whatsapp' | 'sms'>('general');
+  
+  // Import Logs Search & Filter State
+  const [importSearch, setImportSearch] = useState('');
+  const [importStatusFilter, setImportStatusFilter] = useState<'ALL' | 'SUCCESS' | 'PARTIAL' | 'FAILED'>('ALL');
   const [form, setForm] = useState<CollegeSettings>({
     smtpHost: 'smtp.office365.com',
     smtpPort: 587,
@@ -400,6 +413,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <Users className="w-3.5 h-3.5" />
                   <span>User Credentials ({usersList.length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('imports')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                    activeTab === 'imports' ? 'bg-indigo-600 text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Bulk Import Records ({importLogs.length})</span>
                 </button>
               </>
             )}
@@ -1245,6 +1267,163 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'imports' && (
+          <div className="space-y-4 text-xs">
+            {/* Top Bar / Stats */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+                  <h4 className="font-bold text-slate-900 text-sm">Bulk CSV & Excel Import Records & Audit Logs</h4>
+                </div>
+                <p className="text-slate-500 text-[11px]">
+                  View historical records of CSV & Excel file uploads, row statistics, success/failure statuses, and upload operators.
+                </p>
+              </div>
+
+              {onNavigateToBulkUpload && (
+                <button
+                  type="button"
+                  onClick={onNavigateToBulkUpload}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition flex items-center space-x-1.5 shrink-0"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Launch Bulk Import Tool</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Import Runs</span>
+                <span className="text-lg font-bold text-slate-900">{importLogs.length}</span>
+              </div>
+              <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Records Processed</span>
+                <span className="text-lg font-bold text-indigo-600">
+                  {importLogs.reduce((acc, curr) => acc + (curr.totalRecords || 0), 0)}
+                </span>
+              </div>
+              <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Successfully Imported</span>
+                <span className="text-lg font-bold text-emerald-600">
+                  {importLogs.reduce((acc, curr) => acc + (curr.importedCount || 0), 0)}
+                </span>
+              </div>
+              <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Skipped / Errors</span>
+                <span className="text-lg font-bold text-amber-600">
+                  {importLogs.reduce((acc, curr) => acc + (curr.skippedCount || 0), 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Search & Filter Controls */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search file name, operator..."
+                  value={importSearch}
+                  onChange={(e) => setImportSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                <Filter className="w-4 h-4 text-slate-400" />
+                <span className="font-bold text-slate-600 text-xs">Status Filter:</span>
+                <select
+                  value={importStatusFilter}
+                  onChange={(e) => setImportStatusFilter(e.target.value as any)}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="SUCCESS">SUCCESS</option>
+                  <option value="PARTIAL">PARTIAL</option>
+                  <option value="FAILED">FAILED</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Import Records Table */}
+            <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-80">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold tracking-wider sticky top-0 z-10 border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3">File Name</th>
+                    <th className="px-4 py-3">Uploaded At</th>
+                    <th className="px-4 py-3">Uploaded By</th>
+                    <th className="px-4 py-3 text-center">Total Rows</th>
+                    <th className="px-4 py-3 text-center">Imported</th>
+                    <th className="px-4 py-3 text-center">Updated</th>
+                    <th className="px-4 py-3 text-center">Skipped</th>
+                    <th className="px-4 py-3 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium text-slate-700 bg-white">
+                  {(() => {
+                    const filtered = importLogs.filter((log) => {
+                      const matchesStatus = importStatusFilter === 'ALL' || log.status === importStatusFilter;
+                      const matchesSearch =
+                        log.fileName.toLowerCase().includes(importSearch.toLowerCase()) ||
+                        log.uploadedBy.toLowerCase().includes(importSearch.toLowerCase());
+                      return matchesStatus && matchesSearch;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                            <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p className="font-bold text-slate-600">No Bulk Import Records Found</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {importSearch || importStatusFilter !== 'ALL'
+                                ? 'Try adjusting your search or status filter criteria.'
+                                : 'No CSV or Excel files have been imported yet.'}
+                            </p>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50 transition">
+                        <td className="px-4 py-3 font-semibold text-slate-900 flex items-center space-x-2">
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[200px]" title={log.fileName}>{log.fileName}</span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{log.uploadedAt}</td>
+                        <td className="px-4 py-3 font-bold text-slate-800">{log.uploadedBy}</td>
+                        <td className="px-4 py-3 text-center font-bold">{log.totalRecords}</td>
+                        <td className="px-4 py-3 text-center font-bold text-emerald-600">{log.importedCount}</td>
+                        <td className="px-4 py-3 text-center text-slate-600">{log.updatedCount || 0}</td>
+                        <td className="px-4 py-3 text-center text-amber-600">{log.skippedCount || 0}</td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                              log.status === 'SUCCESS'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : log.status === 'PARTIAL'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : 'bg-rose-50 text-rose-700 border-rose-200'
+                            }`}
+                          >
+                            {log.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>
