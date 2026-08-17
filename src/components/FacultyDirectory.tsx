@@ -25,6 +25,7 @@ import {
   Info,
   Check,
   AlertCircle,
+  Phone,
 } from 'lucide-react';
 import { exportReportToPDF, exportReportToExcel, exportReportToCSV } from '../utils/reportExporter';
 import { convertFileToJPGDataUrl } from '../utils/imageUtils';
@@ -139,6 +140,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
 
   // Form States
+  const [facultyId, setFacultyId] = useState('FAC101');
   const [fullName, setFullName] = useState('');
   const [designation, setDesignation] = useState('Assistant Professor');
   const [departmentId, setDepartmentId] = useState(departments[0]?.id || 'dept-cs');
@@ -376,8 +378,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     const matchesDept = selectedDept === 'ALL' || f.departmentId === selectedDept;
     const matchesSearch =
       f.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      (f.facultyId && f.facultyId.toLowerCase().includes(search.toLowerCase())) ||
       f.departmentName.toLowerCase().includes(search.toLowerCase()) ||
       f.designation.toLowerCase().includes(search.toLowerCase()) ||
+      (f.mobile && f.mobile.includes(search)) ||
       (f.currentAllocations &&
         f.currentAllocations.some(
           (ca) =>
@@ -389,6 +393,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
   });
 
   const exportHeaders = [
+    'Faculty ID',
     'Faculty Name',
     'Designation',
     'Department',
@@ -413,6 +418,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
             .join('; ') || 'None';
 
     return [
+      f.facultyId || 'FAC-N/A',
       f.fullName,
       f.designation,
       f.departmentName,
@@ -421,7 +427,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
       `${f.experienceYears} Years`,
       `${f.weeklyWorkloadHours} Hours/Week`,
       f.email,
-      f.mobile,
+      f.mobile || 'N/A',
     ];
   });
 
@@ -437,13 +443,14 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
   const handleOpenAdd = () => {
     setEditingFaculty(null);
+    setFacultyId(`FAC${Math.floor(100 + Math.random() * 900)}`);
     setFullName('');
     setDesignation('Assistant Professor');
     setDepartmentId(departments[0]?.id || 'dept-cs');
     setQualification('Ph.D. Computer Engineering');
     setExperienceYears(6);
     setEmail('');
-    setMobile('9876543210');
+    setMobile('+91 98000 00000');
     setWeeklyWorkloadHours(16);
     setPhoto('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
     setAllocatedSubjects([]);
@@ -456,13 +463,14 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
 
   const handleOpenEdit = (fac: Faculty) => {
     setEditingFaculty(fac);
+    setFacultyId(fac.facultyId || `FAC${Math.floor(100 + Math.random() * 900)}`);
     setFullName(fac.fullName);
     setDesignation(fac.designation);
     setDepartmentId(fac.departmentId);
     setQualification(fac.qualification);
     setExperienceYears(fac.experienceYears);
     setEmail(fac.email);
-    setMobile(fac.mobile);
+    setMobile(fac.mobile || '+91 98000 00000');
     setWeeklyWorkloadHours(fac.weeklyWorkloadHours);
     setPhoto(fac.photo);
 
@@ -824,6 +832,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     if (editingFaculty) {
       const updatedFac: Faculty = {
         ...editingFaculty,
+        facultyId,
         fullName,
         designation: designation as any,
         departmentId,
@@ -867,7 +876,7 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
     } else {
       const newFac: Faculty = {
         id: `fac-${Date.now()}`,
-        facultyId: `FAC${Math.floor(100 + Math.random() * 900)}`,
+        facultyId: facultyId || `FAC${Math.floor(100 + Math.random() * 900)}`,
         fullName,
         designation: designation as any,
         departmentId,
@@ -1132,8 +1141,11 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                       alt=""
                     />
                     <div>
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <h3 className="text-sm font-bold text-slate-900">{fac.fullName}</h3>
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-mono font-bold rounded-md border border-indigo-200 shrink-0">
+                          {fac.facultyId || 'FAC-N/A'}
+                        </span>
                       </div>
                       <p className="text-xs font-semibold text-indigo-600">{fac.designation}</p>
                       <p className="text-[11px] text-slate-500">{fac.departmentName}</p>
@@ -1180,6 +1192,10 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     <span>
                       Experience: <strong>{fac.experienceYears} Years</strong>
                     </span>
+                  </p>
+                  <p className="flex items-center space-x-2">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="font-semibold text-slate-700">{fac.mobile || 'N/A'}</span>
                   </p>
                   <p className="flex items-center space-x-2">
                     <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -1368,16 +1384,29 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
             )}
 
             <form onSubmit={handleSave} className="space-y-4 text-xs font-medium">
-              <div>
-                <label className="text-slate-700 block mb-1 font-bold">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Dr. Rajesh Verma"
-                  className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Faculty ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={facultyId}
+                    onChange={(e) => setFacultyId(e.target.value)}
+                    placeholder="e.g. FAC101"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono font-bold text-indigo-700"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Dr. Rajesh Verma"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1445,10 +1474,24 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="faculty@apextech.edu"
+                    placeholder="faculty@cktcollege.edu.in"
                     className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Mobile Number</label>
+                  <input
+                    type="tel"
+                    required
+                    value={mobile}
+                    onChange={(e) => setMobile(e.target.value)}
+                    placeholder="e.g. +91 98765 43210"
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-700 block mb-1 font-bold">Workload (Hrs/Wk)</label>
                   <input
@@ -1457,6 +1500,16 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                     min={1}
                     value={weeklyWorkloadHours}
                     onChange={(e) => setWeeklyWorkloadHours(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-700 block mb-1 font-bold">Photo URL</label>
+                  <input
+                    type="text"
+                    value={photo}
+                    onChange={(e) => setPhoto(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
                     className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>

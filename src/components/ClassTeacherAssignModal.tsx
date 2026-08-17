@@ -312,7 +312,7 @@ export const ClassTeacherAssignModal: React.FC<ClassTeacherAssignModalProps> = (
                     >
                       {facultyList.map((f) => (
                         <option key={f.id} value={f.id}>
-                          {f.fullName} — {f.designation} ({f.departmentName})
+                          [{f.facultyId || 'FAC'}] {f.fullName} — {f.designation} ({f.departmentName})
                         </option>
                       ))}
                     </select>
@@ -332,7 +332,7 @@ export const ClassTeacherAssignModal: React.FC<ClassTeacherAssignModalProps> = (
                         .filter((f) => f.id !== selectedClassTeacherId)
                         .map((f) => (
                           <option key={f.id} value={f.id}>
-                            {f.fullName} — {f.designation}
+                            [{f.facultyId || 'FAC'}] {f.fullName} — {f.designation}
                           </option>
                         ))}
                     </select>
