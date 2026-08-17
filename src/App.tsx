@@ -109,6 +109,23 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('fluxira_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('fluxira_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // ERP State Data (SQL Backend API is Single Source of Truth)
   const [programs, setPrograms] = useState<Program[]>(INITIAL_PROGRAMS);
@@ -1259,6 +1276,8 @@ export default function App() {
         currentUser={currentUser}
         defaulterCount={defaultersCount}
         pendingLeavesCount={pendingLeavesCount}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
       />
 
       {/* Main Container */}
@@ -1274,6 +1293,8 @@ export default function App() {
           unreadNotifCount={unreadNotifs}
           onOpenNotifs={() => setShowNotifDrawer(!showNotifDrawer)}
           onLogout={handleLogout}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
         />
 
         {/* Notifications Drawer */}

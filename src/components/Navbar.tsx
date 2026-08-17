@@ -4,6 +4,8 @@ import {
   Bell,
   Settings,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -15,6 +17,8 @@ interface NavbarProps {
   unreadNotifCount: number;
   onOpenNotifs: () => void;
   onLogout?: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -23,11 +27,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   unreadNotifCount,
   onOpenNotifs,
   onLogout,
+  isSidebarCollapsed = false,
+  onToggleSidebar,
 }) => {
   return (
     <header className="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0 z-30">
-      {/* Title */}
-      <div>
+      {/* Title & Toggle */}
+      <div className="flex items-center gap-4">
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition"
+            title={isSidebarCollapsed ? 'Expand Side Menu' : 'Collapse Side Menu'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+        )}
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Institutional Dashboard</h1>
       </div>
 
@@ -69,3 +84,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+
