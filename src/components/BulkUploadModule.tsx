@@ -300,7 +300,7 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
       'Qualification',
       'Experience Years',
       'Weekly Workload Hours',
-      'Photo URL',
+      'Photo',
       'Allocated Subjects',
     ].join(',');
 

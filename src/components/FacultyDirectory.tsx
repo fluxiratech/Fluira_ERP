@@ -1504,14 +1504,27 @@ export const FacultyDirectory: React.FC<FacultyDirectoryProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-700 block mb-1 font-bold">Photo URL</label>
-                  <input
-                    type="text"
-                    value={photo}
-                    onChange={(e) => setPhoto(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  />
+                  <label className="text-slate-700 block mb-1 font-bold">Faculty Profile Photo (.jpg file)</label>
+                  <label className="cursor-pointer px-3 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs shadow-xs transition flex items-center justify-center space-x-1.5 mt-0.5">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Choose .JPG Photo File</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,.jpg,.jpeg"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          try {
+                            const jpgDataUrl = await convertFileToJPGDataUrl(file);
+                            setPhoto(jpgDataUrl);
+                          } catch (err) {
+                            alert('Please upload a valid .jpg photo file.');
+                          }
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
               </div>
 

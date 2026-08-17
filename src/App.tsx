@@ -327,6 +327,10 @@ export default function App() {
   const handleAdmitStudent = async (newStudent: Partial<Student360Profile>) => {
     const ns = newStudent as any;
     const docId = newStudent.id || `stu-${Date.now()}`;
+    const DEFAULT_STUDENT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+    
+    const { passportPhoto, ...studentDataWithoutPhoto } = ns;
+
     const fullStudent: Student360Profile = {
       id: docId,
       studentId: newStudent.studentId || `STU${Date.now().toString().slice(-6)}`,
@@ -358,7 +362,8 @@ export default function App() {
       sscPercentage: ns.sscPercentage || 85,
       hscPercentage: ns.hscPercentage || 85,
       technicalSkills: [], programmingLanguages: [], certifications: [], internships: [], projects: [], sportsAndExtra: [],
-      ...(newStudent as any),
+      ...studentDataWithoutPhoto,
+      passportPhoto: DEFAULT_STUDENT_AVATAR,
     };
 
     const studentUser: User = {
@@ -369,7 +374,7 @@ export default function App() {
       departmentId: fullStudent.departmentId,
       departmentName: fullStudent.departmentName,
       phone: (fullStudent as any).personalMobile || (fullStudent as any).mobile || ns.mobile || '+91 98000 00000',
-      avatar: fullStudent.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      avatar: DEFAULT_STUDENT_AVATAR,
       password: ns.password || 'StudentPassword@123',
       linkedStudentId: fullStudent.id,
       isActive: true,
@@ -390,6 +395,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(studentUser),
       });
+      await refreshAllData();
     } catch (err) {
       console.error('Error admitting student:', err);
     }
@@ -758,6 +764,8 @@ export default function App() {
 
   // Bulk Import Handler
   const handleImportStudentsBatch = async (newStudents: Partial<Student360Profile>[]) => {
+    const DEFAULT_STUDENT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+
     const formatted: Student360Profile[] = newStudents.map((s, idx) => ({
       id: `stu-imp-${Date.now()}-${idx}`,
       studentId: s.studentId || `STU${Date.now() + idx}`,
@@ -810,12 +818,12 @@ export default function App() {
       attendancePercentage: 100,
       totalLectures: 0,
       attendedLectures: 0,
-      passportPhoto: s.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      passportPhoto: DEFAULT_STUDENT_AVATAR,
     }));
 
     setStudents((prev) => [...prev, ...formatted]);
     
-    // Create corresponding user credentials for imported students
+    // Create corresponding user credentials for imported students using default placeholder avatar
     const studentUsers: User[] = formatted.map((s) => ({
       id: `usr-${s.id}`,
       name: s.fullName,
@@ -824,7 +832,7 @@ export default function App() {
       departmentId: s.departmentId,
       departmentName: s.departmentName,
       phone: s.personalMobile || s.whatsappNumber,
-      avatar: s.passportPhoto,
+      avatar: DEFAULT_STUDENT_AVATAR,
       password: 'StudentPassword@123',
       isActive: true,
       createdAt: new Date().toISOString().split('T')[0],
@@ -868,8 +876,10 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newLog),
       });
-      refreshAllData();
     } catch (e) {}
+
+    // Verify and refresh all data after API calls complete to guarantee fresh data in usersList
+    await refreshAllData();
   };
 
   const handleImportFacultyBatch = (importedFaculty: Partial<Faculty>[]) => {
