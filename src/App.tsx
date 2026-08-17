@@ -815,15 +815,37 @@ export default function App() {
 
     setStudents((prev) => [...prev, ...formatted]);
     
-    // Send batch to server API
+    // Create corresponding user credentials for imported students
+    const studentUsers: User[] = formatted.map((s) => ({
+      id: `usr-${s.id}`,
+      name: s.fullName,
+      email: s.email || `${s.rollNumber.toLowerCase()}@cktcollege.edu.in`,
+      role: 'Student' as const,
+      departmentId: s.departmentId,
+      departmentName: s.departmentName,
+      phone: s.personalMobile || s.whatsappNumber,
+      avatar: s.passportPhoto,
+      password: 'StudentPassword@123',
+      isActive: true,
+      createdAt: new Date().toISOString().split('T')[0],
+    }));
+
+    setUsersList((prev) => [...prev, ...studentUsers]);
+
+    // Send student records and user credentials batch to server API
     try {
       await fetch('/api/students/batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formatted),
       });
+      await fetch('/api/users/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(studentUsers),
+      });
     } catch (err) {
-      console.error('Error batch saving students:', err);
+      console.error('Error batch saving students and student user credentials:', err);
     }
 
     // Log import
@@ -890,6 +912,11 @@ export default function App() {
     }));
 
     setUsersList((prev) => [...prev, ...newUsers]);
+    fetch('/api/users/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newUsers),
+    }).catch((err) => console.error('Error batch saving faculty users:', err));
   };
 
   const handleImportSubjectsBatch = async (importedSubjects: Partial<Subject>[]) => {

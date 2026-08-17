@@ -1170,7 +1170,64 @@ export async function initializeDatabase(seedData?: any) {
 export async function getAllUsers(): Promise<User[]> {
   try {
     const rows = await db.select().from(schema.users);
-    return rows.map((r) => ({
+    const existingEmails = new Set(rows.map((r) => r.email?.toLowerCase()));
+    
+    // Auto-sync students missing user credentials
+    try {
+      const studentRows = await db.select().from(schema.students);
+      for (const st of studentRows) {
+        const studentEmail = (st.email || `${st.rollNumber?.toLowerCase() || st.id}@cktcollege.edu.in`).toLowerCase();
+        if (!existingEmails.has(studentEmail)) {
+          const newUserVal = {
+            id: `usr-${st.id}`,
+            name: st.fullName || 'Student',
+            email: studentEmail,
+            role: 'Student',
+            departmentId: st.departmentId || null,
+            departmentName: st.departmentName || null,
+            phone: st.personalMobile || st.whatsappNumber || null,
+            avatar: st.passportPhoto || null,
+            password: 'StudentPassword@123',
+            isActive: true,
+            createdAt: st.admissionDate || new Date().toISOString().substring(0, 10),
+          };
+          await db.insert(schema.users).values(newUserVal).onConflictDoNothing();
+          existingEmails.add(studentEmail);
+        }
+      }
+    } catch (sErr) {
+      console.error('Error auto-syncing students to users:', sErr);
+    }
+
+    // Auto-sync faculty missing user credentials
+    try {
+      const facultyRows = await db.select().from(schema.facultyList);
+      for (const fc of facultyRows) {
+        const facultyEmail = (fc.email || `faculty.${fc.id}@cktcollege.edu.in`).toLowerCase();
+        if (!existingEmails.has(facultyEmail)) {
+          const newUserVal = {
+            id: `usr-${fc.id}`,
+            name: fc.fullName || 'Faculty Member',
+            email: facultyEmail,
+            role: 'Faculty',
+            departmentId: fc.departmentId || null,
+            departmentName: fc.departmentName || null,
+            phone: fc.mobile || null,
+            avatar: fc.photo || null,
+            password: 'FacultyPassword@123',
+            isActive: true,
+            createdAt: new Date().toISOString().substring(0, 10),
+          };
+          await db.insert(schema.users).values(newUserVal).onConflictDoNothing();
+          existingEmails.add(facultyEmail);
+        }
+      }
+    } catch (fErr) {
+      console.error('Error auto-syncing faculty to users:', fErr);
+    }
+
+    const updatedRows = await db.select().from(schema.users);
+    return updatedRows.map((r) => ({
       id: r.id,
       name: r.name,
       email: r.email,
@@ -1204,8 +1261,29 @@ export async function insertUser(user: User): Promise<User> {
     isActive: user.isActive !== undefined ? user.isActive : true,
     lastLogin: user.lastLogin || null,
     createdAt: user.createdAt || new Date().toISOString().substring(0, 10),
-  });
+  }).onConflictDoNothing();
   return user;
+}
+
+export async function upsertUser(user: User): Promise<User> {
+  const existing = await db.select().from(schema.users).where(eq(schema.users.email, user.email));
+  if (existing.length > 0) {
+    await updateUser(existing[0].id, user);
+    return { ...existing[0], ...user } as User;
+  } else {
+    return await insertUser(user);
+  }
+}
+
+export async function batchInsertUsers(usersList: User[]): Promise<User[]> {
+  for (const u of usersList) {
+    try {
+      await upsertUser(u);
+    } catch (err) {
+      console.error('Error in batchInsertUsers:', err);
+    }
+  }
+  return usersList;
 }
 
 export async function updateUser(id: string, updates: Partial<User>): Promise<User | null> {

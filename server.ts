@@ -38,6 +38,7 @@ import {
   initializeDatabase,
   getAllUsers,
   insertUser,
+  batchInsertUsers,
   updateUser,
   deleteUser,
   getAllStudents,
@@ -267,6 +268,19 @@ async function startServer() {
       await insertUser(newUser);
       await addAuditLog('Admin', 'Admin', 'CREATE_USER', 'USER_MGMT', `Created new user ${newUser.name} (${newUser.role})`);
       res.status(201).json(newUser);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/users/batch', async (req, res) => {
+    try {
+      const newUsers: User[] = req.body;
+      if (Array.isArray(newUsers)) {
+        await batchInsertUsers(newUsers);
+        await addAuditLog('Admin', 'Admin', 'BATCH_IMPORT_USERS', 'USER_MGMT', `Batch synced ${newUsers.length} user accounts into Cloud SQL`);
+      }
+      res.json({ success: true, count: newUsers?.length || 0 });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
