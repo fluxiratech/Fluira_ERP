@@ -723,31 +723,17 @@ export async function initializeDatabase(seedData?: any) {
     `);
 
     // 1. Users
-    const existingUsers = await db.select().from(schema.users);
-    if (existingUsers.length === 0) {
+    try {
       const usersToInsert = (seedData?.users && seedData.users.length > 0) ? seedData.users : INITIAL_USERS;
-      console.log(`[Cloud SQL] Seeding ${usersToInsert.length} initial users...`);
       for (const u of usersToInsert) {
-        await db.insert(schema.users).values({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          departmentId: u.departmentId || null,
-          departmentName: u.departmentName || null,
-          phone: u.phone || null,
-          avatar: u.avatar || null,
-          password: u.password || null,
-          isActive: u.isActive !== undefined ? u.isActive : true,
-          lastLogin: u.lastLogin || null,
-          createdAt: u.createdAt || new Date().toISOString().substring(0, 10),
-        }).onConflictDoNothing();
+        await insertUser(u);
       }
+    } catch (uErr) {
+      console.error('[initializeDatabase users seed]:', uErr);
     }
 
     // 2. Programs
-    const existingPrograms = await db.select().from(schema.programs);
-    if (existingPrograms.length === 0) {
+    try {
       const progsToInsert = (seedData?.programs && seedData.programs.length > 0) ? seedData.programs : INITIAL_PROGRAMS;
       for (const p of progsToInsert) {
         await db.insert(schema.programs).values({
@@ -759,11 +745,12 @@ export async function initializeDatabase(seedData?: any) {
           updatedAt: p.updatedAt || new Date().toISOString(),
         }).onConflictDoNothing();
       }
+    } catch (pErr) {
+      console.error('[initializeDatabase programs seed]:', pErr);
     }
 
     // 3. Departments
-    const existingDepts = await db.select().from(schema.departments);
-    if (existingDepts.length === 0) {
+    try {
       const deptsToInsert = (seedData?.departments && seedData.departments.length > 0) ? seedData.departments : INITIAL_DEPARTMENTS;
       for (const d of deptsToInsert) {
         await db.insert(schema.departments).values({
@@ -778,11 +765,12 @@ export async function initializeDatabase(seedData?: any) {
           avgAttendancePct: d.avgAttendancePct || 0,
         }).onConflictDoNothing();
       }
+    } catch (dErr) {
+      console.error('[initializeDatabase departments seed]:', dErr);
     }
 
     // 4. Courses
-    const existingCourses = await db.select().from(schema.courses);
-    if (existingCourses.length === 0) {
+    try {
       const coursesToInsert = (seedData?.courses && seedData.courses.length > 0) ? seedData.courses : INITIAL_COURSES;
       for (const c of coursesToInsert) {
         await db.insert(schema.courses).values({
@@ -801,11 +789,12 @@ export async function initializeDatabase(seedData?: any) {
           updatedAt: c.updatedAt || new Date().toISOString(),
         }).onConflictDoNothing();
       }
+    } catch (cErr) {
+      console.error('[initializeDatabase courses seed]:', cErr);
     }
 
     // 5. Subjects
-    const existingSubjects = await db.select().from(schema.subjects);
-    if (existingSubjects.length === 0) {
+    try {
       const subjectsToInsert = (seedData?.subjects && seedData.subjects.length > 0) ? seedData.subjects : INITIAL_SUBJECTS;
       for (const s of subjectsToInsert) {
         await db.insert(schema.subjects).values({
@@ -825,24 +814,28 @@ export async function initializeDatabase(seedData?: any) {
           status: s.status || 'Active',
         }).onConflictDoNothing();
       }
+    } catch (sErr) {
+      console.error('[initializeDatabase subjects seed]:', sErr);
     }
 
     // 6. Students
-    const existingStudents = await db.select().from(schema.students);
-    if (existingStudents.length === 0) {
+    try {
       const studentsToInsert = (seedData?.students && seedData.students.length > 0) ? seedData.students : INITIAL_STUDENTS;
       for (const st of studentsToInsert) {
-        await db.insert(schema.students).values(mapStudentToSql(st)).onConflictDoNothing();
+        await upsertStudent(st);
       }
+    } catch (stErr) {
+      console.error('[initializeDatabase students seed]:', stErr);
     }
 
     // 7. Faculty
-    const existingFac = await db.select().from(schema.facultyList);
-    if (existingFac.length === 0) {
+    try {
       const facToInsert = (seedData?.facultyList && seedData.facultyList.length > 0) ? seedData.facultyList : INITIAL_FACULTY;
       for (const f of facToInsert) {
         await db.insert(schema.facultyList).values(mapFacultyToSql(f)).onConflictDoNothing();
       }
+    } catch (fErr) {
+      console.error('[initializeDatabase faculty seed]:', fErr);
     }
 
     // 8. Timetable
@@ -1248,12 +1241,24 @@ export async function getAllUsers(): Promise<User[]> {
 }
 
 export async function insertUser(user: User): Promise<User> {
-  await db.insert(schema.users).values({
+  let deptId = user.departmentId || null;
+  if (deptId) {
+    try {
+      const deptExists = await db.select().from(schema.departments).where(eq(schema.departments.id, deptId));
+      if (deptExists.length === 0) {
+        deptId = null;
+      }
+    } catch {
+      deptId = null;
+    }
+  }
+
+  const payload = {
     id: user.id,
-    name: user.name,
+    name: user.name || 'User',
     email: user.email,
     role: user.role,
-    departmentId: user.departmentId || null,
+    departmentId: deptId,
     departmentName: user.departmentName || null,
     phone: user.phone || null,
     avatar: user.avatar || null,
@@ -1261,16 +1266,36 @@ export async function insertUser(user: User): Promise<User> {
     isActive: user.isActive !== undefined ? user.isActive : true,
     lastLogin: user.lastLogin || null,
     createdAt: user.createdAt || new Date().toISOString().substring(0, 10),
-  }).onConflictDoNothing();
+  };
+
+  try {
+    await db.insert(schema.users).values(payload).onConflictDoNothing();
+  } catch (err: any) {
+    try {
+      await db.insert(schema.users).values({ ...payload, departmentId: null }).onConflictDoNothing();
+    } catch (err2) {
+      console.error(`[insertUser error for ${user.email}]:`, err2);
+    }
+  }
   return user;
 }
 
 export async function upsertUser(user: User): Promise<User> {
-  const existing = await db.select().from(schema.users).where(eq(schema.users.email, user.email));
-  if (existing.length > 0) {
-    await updateUser(existing[0].id, user);
-    return { ...existing[0], ...user } as User;
-  } else {
+  try {
+    const existing = await db.select().from(schema.users).where(
+      or(
+        eq(schema.users.id, user.id),
+        eq(schema.users.email, user.email)
+      )
+    );
+    if (existing.length > 0) {
+      await updateUser(existing[0].id, user);
+      return { ...existing[0], ...user } as User;
+    } else {
+      return await insertUser(user);
+    }
+  } catch (err: any) {
+    console.error(`[upsertUser error for ${user.email}]:`, err);
     return await insertUser(user);
   }
 }
@@ -1291,7 +1316,20 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
   if (updates.name !== undefined) updateData.name = updates.name;
   if (updates.email !== undefined) updateData.email = updates.email;
   if (updates.role !== undefined) updateData.role = updates.role;
-  if (updates.departmentId !== undefined) updateData.departmentId = updates.departmentId;
+  if (updates.departmentId !== undefined) {
+    let deptId = updates.departmentId || null;
+    if (deptId) {
+      try {
+        const deptExists = await db.select().from(schema.departments).where(eq(schema.departments.id, deptId));
+        if (deptExists.length === 0) {
+          deptId = null;
+        }
+      } catch {
+        deptId = null;
+      }
+    }
+    updateData.departmentId = deptId;
+  }
   if (updates.departmentName !== undefined) updateData.departmentName = updates.departmentName;
   if (updates.phone !== undefined) updateData.phone = updates.phone;
   if (updates.avatar !== undefined) updateData.avatar = updates.avatar;
@@ -1299,7 +1337,17 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
   if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
   if (updates.lastLogin !== undefined) updateData.lastLogin = updates.lastLogin;
 
-  await db.update(schema.users).set(updateData).where(eq(schema.users.id, id));
+  try {
+    await db.update(schema.users).set(updateData).where(eq(schema.users.id, id));
+  } catch (err) {
+    try {
+      if (updateData.departmentId) updateData.departmentId = null;
+      await db.update(schema.users).set(updateData).where(eq(schema.users.id, id));
+    } catch (err2) {
+      console.error('[updateUser error]:', err2);
+    }
+  }
+
   const rows = await db.select().from(schema.users).where(eq(schema.users.id, id));
   if (rows.length === 0) return null;
   const r = rows[0];
@@ -1351,23 +1399,56 @@ export async function getAllStudents(): Promise<Student360Profile[]> {
 }
 
 export async function insertStudent(st: Student360Profile): Promise<Student360Profile> {
-  await db.insert(schema.students).values(mapStudentToSql(st));
-  return st;
+  return await upsertStudent(st);
 }
 
 export async function upsertStudent(st: Student360Profile): Promise<Student360Profile> {
   try {
     const payload = mapStudentToSql(st);
-    
-    // Check if provided departmentId exists in schema.departments
+
+    // Validate departmentId
     if (payload.departmentId) {
-      const deptExists = await db.select().from(schema.departments).where(eq(schema.departments.id, payload.departmentId));
-      if (deptExists.length === 0) {
+      try {
+        const deptExists = await db.select().from(schema.departments).where(eq(schema.departments.id, payload.departmentId));
+        if (deptExists.length === 0) {
+          payload.departmentId = null;
+        }
+      } catch {
         payload.departmentId = null;
       }
     }
 
-    const existing = await db.select().from(schema.students).where(eq(schema.students.id, st.id));
+    // Validate programId
+    if (payload.programId) {
+      try {
+        const progExists = await db.select().from(schema.programs).where(eq(schema.programs.id, payload.programId));
+        if (progExists.length === 0) {
+          payload.programId = null;
+        }
+      } catch {
+        payload.programId = null;
+      }
+    }
+
+    // Validate courseId
+    if (payload.courseId) {
+      try {
+        const courseExists = await db.select().from(schema.courses).where(eq(schema.courses.id, payload.courseId));
+        if (courseExists.length === 0) {
+          payload.courseId = null;
+        }
+      } catch {
+        payload.courseId = null;
+      }
+    }
+
+    const existing = await db.select().from(schema.students).where(
+      or(
+        eq(schema.students.id, st.id),
+        eq(schema.students.studentId, st.studentId)
+      )
+    );
+
     if (existing.length > 0) {
       await db.update(schema.students).set(payload).where(eq(schema.students.id, existing[0].id));
     } else {
@@ -1382,7 +1463,12 @@ export async function upsertStudent(st: Student360Profile): Promise<Student360Pr
         courseId: null,
         programId: null,
       };
-      const existing = await db.select().from(schema.students).where(eq(schema.students.id, st.id));
+      const existing = await db.select().from(schema.students).where(
+        or(
+          eq(schema.students.id, st.id),
+          eq(schema.students.studentId, st.studentId)
+        )
+      );
       if (existing.length > 0) {
         await db.update(schema.students).set(safePayload).where(eq(schema.students.id, existing[0].id));
       } else {
@@ -1401,7 +1487,7 @@ export async function updateStudent(id: string, updates: Partial<Student360Profi
   if (existing.length === 0) return null;
   const current = mapSqlToStudent(existing[0]);
   const merged: Student360Profile = { ...current, ...updates };
-  await db.update(schema.students).set(mapStudentToSql(merged)).where(or(eq(schema.students.id, id), eq(schema.students.studentId, id)));
+  await upsertStudent(merged);
   return merged;
 }
 

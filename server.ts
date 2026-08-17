@@ -38,6 +38,7 @@ import {
   initializeDatabase,
   getAllUsers,
   insertUser,
+  upsertUser,
   batchInsertUsers,
   updateUser,
   deleteUser,
@@ -354,6 +355,25 @@ async function startServer() {
         for (const st of newStudents) {
           try {
             await upsertStudent(st);
+            // Also auto-sync user credentials for student directory & user management
+            try {
+              const studentUser: User = {
+                id: `usr-${st.id}`,
+                name: st.fullName,
+                email: st.email || `${(st.rollNumber || `stu${count}`).toLowerCase().replace(/[^a-z0-9]/g, '')}@cktcollege.edu.in`,
+                role: 'Student',
+                departmentId: st.departmentId,
+                departmentName: st.departmentName,
+                phone: st.personalMobile || st.whatsappNumber,
+                avatar: st.passportPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+                password: 'StudentPassword@123',
+                isActive: true,
+                createdAt: new Date().toISOString().split('T')[0],
+              };
+              await upsertUser(studentUser);
+            } catch (uErr) {
+              console.error(`[batch user sync error for ${st.fullName}]:`, uErr);
+            }
             count++;
           } catch (stErr: any) {
             console.error(`[batch student error] Failed for student ${st?.studentId || st?.id}:`, stErr?.message || stErr);
