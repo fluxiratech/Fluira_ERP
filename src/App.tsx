@@ -882,7 +882,7 @@ export default function App() {
     await refreshAllData();
   };
 
-  const handleImportFacultyBatch = (importedFaculty: Partial<Faculty>[]) => {
+  const handleImportFacultyBatch = async (importedFaculty: Partial<Faculty>[]) => {
     const newFacs: Faculty[] = importedFaculty.map((f, idx) => ({
       id: `fac-imported-${Date.now()}-${idx}`,
       facultyId: f.facultyId || `FAC${100 + idx}`,
@@ -901,11 +901,15 @@ export default function App() {
     }));
 
     setFacultyList((prev) => [...prev, ...newFacs]);
-    fetch('/api/faculty/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newFacs),
-    }).catch((err) => console.error('Error batch saving faculty:', err));
+    try {
+      await fetch('/api/faculty/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newFacs),
+      });
+    } catch (err) {
+      console.error('Error batch saving faculty:', err);
+    }
 
     const newUsers: User[] = newFacs.map((f) => ({
       id: f.id,
@@ -922,11 +926,17 @@ export default function App() {
     }));
 
     setUsersList((prev) => [...prev, ...newUsers]);
-    fetch('/api/users/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUsers),
-    }).catch((err) => console.error('Error batch saving faculty users:', err));
+    try {
+      await fetch('/api/users/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUsers),
+      });
+    } catch (err) {
+      console.error('Error batch saving faculty users:', err);
+    }
+
+    await refreshAllData();
   };
 
   const handleImportSubjectsBatch = async (importedSubjects: Partial<Subject>[]) => {
