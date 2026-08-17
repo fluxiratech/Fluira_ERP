@@ -183,20 +183,20 @@ export function mapStudentToSql(st: Student360Profile): any {
     sscSchoolName: st.sscSchoolName || '',
     sscBoard: st.sscBoard || '',
     sscPassingYear: st.sscPassingYear || '',
-    sscPercentage: st.sscPercentage || 0,
+    sscPercentage: isNaN(Number(st.sscPercentage)) ? 0 : Number(st.sscPercentage),
     hscCollegeName: st.hscCollegeName || '',
     hscBoard: st.hscBoard || '',
     hscStream: st.hscStream || '',
     hscPassingYear: st.hscPassingYear || '',
-    hscPercentage: st.hscPercentage || 0,
+    hscPercentage: isNaN(Number(st.hscPercentage)) ? 0 : Number(st.hscPercentage),
     academicPerformance: JSON.stringify(st.academicPerformance || []),
-    sem1Gpa: st.sem1Gpa || 0,
-    sem2Gpa: st.sem2Gpa || 0,
-    sem3Gpa: st.sem3Gpa || 0,
-    sem4Gpa: st.sem4Gpa || 0,
-    sem5Gpa: st.sem5Gpa ?? null,
-    sem6Gpa: st.sem6Gpa ?? null,
-    overallCgpa: st.overallCgpa || 0,
+    sem1Gpa: isNaN(Number(st.sem1Gpa)) ? 0 : Number(st.sem1Gpa),
+    sem2Gpa: isNaN(Number(st.sem2Gpa)) ? 0 : Number(st.sem2Gpa),
+    sem3Gpa: isNaN(Number(st.sem3Gpa)) ? 0 : Number(st.sem3Gpa),
+    sem4Gpa: isNaN(Number(st.sem4Gpa)) ? 0 : Number(st.sem4Gpa),
+    sem5Gpa: st.sem5Gpa !== undefined && st.sem5Gpa !== null && !isNaN(Number(st.sem5Gpa)) ? Number(st.sem5Gpa) : null,
+    sem6Gpa: st.sem6Gpa !== undefined && st.sem6Gpa !== null && !isNaN(Number(st.sem6Gpa)) ? Number(st.sem6Gpa) : null,
+    overallCgpa: isNaN(Number(st.overallCgpa)) ? 0 : Number(st.overallCgpa),
     technicalSkills: JSON.stringify(st.technicalSkills || []),
     programmingLanguages: JSON.stringify(st.programmingLanguages || []),
     certifications: JSON.stringify(st.certifications || []),
@@ -214,9 +214,9 @@ export function mapStudentToSql(st: Student360Profile): any {
     academicStatus: st.academicStatus || 'Active',
     batch: st.batch || null,
     annualIncome: st.annualIncome || null,
-    totalLectures: st.totalLectures || 0,
-    attendedLectures: st.attendedLectures || 0,
-    attendancePercentage: st.attendancePercentage || 0,
+    totalLectures: isNaN(Number(st.totalLectures)) ? 0 : Math.round(Number(st.totalLectures)),
+    attendedLectures: isNaN(Number(st.attendedLectures)) ? 0 : Math.round(Number(st.attendedLectures)),
+    attendancePercentage: isNaN(Number(st.attendancePercentage)) ? 0 : Number(st.attendancePercentage),
   };
 }
 
@@ -720,11 +720,59 @@ export async function initializeDatabase(seedData?: any) {
         assigned_at TEXT NOT NULL,
         assigned_by TEXT NOT NULL
       );
+
+      DO $$
+      BEGIN
+        BEGIN
+          ALTER TABLE departments ALTER COLUMN avg_attendance_pct TYPE DOUBLE PRECISION USING avg_attendance_pct::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN ssc_percentage TYPE DOUBLE PRECISION USING ssc_percentage::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN hsc_percentage TYPE DOUBLE PRECISION USING hsc_percentage::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN sem1_gpa TYPE DOUBLE PRECISION USING sem1_gpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN sem2_gpa TYPE DOUBLE PRECISION USING sem2_gpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN sem3_gpa TYPE DOUBLE PRECISION USING sem3_gpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN sem4_gpa TYPE DOUBLE PRECISION USING sem4_gpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN sem5_gpa TYPE DOUBLE PRECISION USING sem5_gpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN sem6_gpa TYPE DOUBLE PRECISION USING sem6_gpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN overall_cgpa TYPE DOUBLE PRECISION USING overall_cgpa::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+        BEGIN
+          ALTER TABLE students ALTER COLUMN attendance_percentage TYPE DOUBLE PRECISION USING attendance_percentage::double precision;
+        EXCEPTION WHEN OTHERS THEN NULL;
+        END;
+      END $$;
     `);
 
     // 1. Users
     try {
-      const usersToInsert = (seedData?.users && seedData.users.length > 0) ? seedData.users : INITIAL_USERS;
+      const usersToInsert = (Array.isArray(seedData?.users) && seedData.users.length > 0) ? seedData.users : INITIAL_USERS;
       for (const u of usersToInsert) {
         await insertUser(u);
       }
@@ -734,7 +782,7 @@ export async function initializeDatabase(seedData?: any) {
 
     // 2. Programs
     try {
-      const progsToInsert = (seedData?.programs && seedData.programs.length > 0) ? seedData.programs : INITIAL_PROGRAMS;
+      const progsToInsert = (Array.isArray(seedData?.programs) && seedData.programs.length > 0) ? seedData.programs : INITIAL_PROGRAMS;
       for (const p of progsToInsert) {
         await db.insert(schema.programs).values({
           id: p.id,
@@ -751,7 +799,7 @@ export async function initializeDatabase(seedData?: any) {
 
     // 3. Departments
     try {
-      const deptsToInsert = (seedData?.departments && seedData.departments.length > 0) ? seedData.departments : INITIAL_DEPARTMENTS;
+      const deptsToInsert = (Array.isArray(seedData?.departments) && seedData.departments.length > 0) ? seedData.departments : INITIAL_DEPARTMENTS;
       for (const d of deptsToInsert) {
         await db.insert(schema.departments).values({
           id: d.id,
@@ -759,10 +807,10 @@ export async function initializeDatabase(seedData?: any) {
           name: d.name,
           hodId: d.hodId || null,
           hodName: d.hodName || null,
-          establishedYear: d.establishedYear || 2010,
-          totalStudents: d.totalStudents || 0,
-          totalFaculty: d.totalFaculty || 0,
-          avgAttendancePct: d.avgAttendancePct || 0,
+          establishedYear: Number(d.establishedYear) || 2010,
+          totalStudents: Number(d.totalStudents) || 0,
+          totalFaculty: Number(d.totalFaculty) || 0,
+          avgAttendancePct: Number(d.avgAttendancePct) || 0,
         }).onConflictDoNothing();
       }
     } catch (dErr) {
@@ -771,7 +819,7 @@ export async function initializeDatabase(seedData?: any) {
 
     // 4. Courses
     try {
-      const coursesToInsert = (seedData?.courses && seedData.courses.length > 0) ? seedData.courses : INITIAL_COURSES;
+      const coursesToInsert = (Array.isArray(seedData?.courses) && seedData.courses.length > 0) ? seedData.courses : INITIAL_COURSES;
       for (const c of coursesToInsert) {
         await db.insert(schema.courses).values({
           id: c.id,
@@ -779,8 +827,8 @@ export async function initializeDatabase(seedData?: any) {
           programName: c.programName || null,
           courseName: c.courseName,
           courseCode: c.courseCode,
-          durationYears: c.durationYears || 3,
-          totalSemesters: c.totalSemesters || 6,
+          durationYears: Number(c.durationYears) || 3,
+          totalSemesters: Number(c.totalSemesters) || 6,
           status: c.status || 'Active',
           departmentId: c.departmentId || null,
           code: c.code || c.courseCode,
@@ -795,7 +843,7 @@ export async function initializeDatabase(seedData?: any) {
 
     // 5. Subjects
     try {
-      const subjectsToInsert = (seedData?.subjects && seedData.subjects.length > 0) ? seedData.subjects : INITIAL_SUBJECTS;
+      const subjectsToInsert = (Array.isArray(seedData?.subjects) && seedData.subjects.length > 0) ? seedData.subjects : INITIAL_SUBJECTS;
       for (const s of subjectsToInsert) {
         await db.insert(schema.subjects).values({
           id: s.id,
@@ -806,9 +854,9 @@ export async function initializeDatabase(seedData?: any) {
           programName: s.programName || null,
           courseId: s.courseId || null,
           courseCode: s.courseCode || null,
-          semester: s.semester,
+          semester: Number(s.semester) || 1,
           type: s.type,
-          credits: s.credits,
+          credits: Number(s.credits) || 0,
           assignedFacultyId: s.assignedFacultyId || null,
           assignedFacultyName: s.assignedFacultyName || null,
           status: s.status || 'Active',
@@ -820,7 +868,7 @@ export async function initializeDatabase(seedData?: any) {
 
     // 6. Students
     try {
-      const studentsToInsert = (seedData?.students && seedData.students.length > 0) ? seedData.students : INITIAL_STUDENTS;
+      const studentsToInsert = (Array.isArray(seedData?.students) && seedData.students.length > 0) ? seedData.students : INITIAL_STUDENTS;
       for (const st of studentsToInsert) {
         await upsertStudent(st);
       }
@@ -830,7 +878,7 @@ export async function initializeDatabase(seedData?: any) {
 
     // 7. Faculty
     try {
-      const facToInsert = (seedData?.facultyList && seedData.facultyList.length > 0) ? seedData.facultyList : INITIAL_FACULTY;
+      const facToInsert = (Array.isArray(seedData?.facultyList) && seedData.facultyList.length > 0) ? seedData.facultyList : INITIAL_FACULTY;
       for (const f of facToInsert) {
         await db.insert(schema.facultyList).values(mapFacultyToSql(f)).onConflictDoNothing();
       }
@@ -839,316 +887,372 @@ export async function initializeDatabase(seedData?: any) {
     }
 
     // 8. Timetable
-    const existingTimetable = await db.select().from(schema.timetable);
-    if (existingTimetable.length === 0) {
-      const ttToInsert = (seedData?.timetable && seedData.timetable.length > 0) ? seedData.timetable : INITIAL_TIMETABLE;
-      for (const t of ttToInsert) {
-        await db.insert(schema.timetable).values({
-          id: t.id,
-          departmentId: t.departmentId,
-          programId: t.programId || null,
-          programName: t.programName || null,
-          courseId: t.courseId || null,
-          courseName: t.courseName || null,
-          semester: t.semester,
-          division: t.division,
-          day: t.day,
-          timeSlot: t.timeSlot,
-          subjectId: t.subjectId,
-          subjectName: t.subjectName,
-          facultyId: t.facultyId,
-          facultyName: t.facultyName,
-          classroom: t.classroom,
-          type: t.type,
-        }).onConflictDoNothing();
+    try {
+      const existingTimetable = await db.select().from(schema.timetable);
+      if (existingTimetable.length === 0) {
+        const ttToInsert = (Array.isArray(seedData?.timetable) && seedData.timetable.length > 0) ? seedData.timetable : INITIAL_TIMETABLE;
+        for (const t of ttToInsert) {
+          await db.insert(schema.timetable).values({
+            id: t.id,
+            departmentId: t.departmentId,
+            programId: t.programId || null,
+            programName: t.programName || null,
+            courseId: t.courseId || null,
+            courseName: t.courseName || null,
+            semester: Number(t.semester) || 1,
+            division: t.division,
+            day: t.day,
+            timeSlot: t.timeSlot,
+            subjectId: t.subjectId,
+            subjectName: t.subjectName,
+            facultyId: t.facultyId,
+            facultyName: t.facultyName,
+            classroom: t.classroom,
+            type: t.type,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (ttErr) {
+      console.error('[initializeDatabase timetable seed]:', ttErr);
     }
 
     // 9. Sessions & Attendance Records
-    const existingSessions = await db.select().from(schema.sessions);
-    if (existingSessions.length === 0) {
-      const sessToInsert = (seedData?.sessions && seedData.sessions.length > 0) ? seedData.sessions : INITIAL_SESSIONS;
-      for (const s of sessToInsert) {
-        await db.insert(schema.sessions).values({
-          id: s.id,
-          date: s.date,
-          departmentId: s.departmentId,
-          programId: s.programId || null,
-          programName: s.programName || null,
-          courseId: s.courseId || null,
-          courseName: s.courseName || null,
-          semester: s.semester,
-          division: s.division,
-          subjectId: s.subjectId,
-          subjectName: s.subjectName,
-          facultyId: s.facultyId,
-          facultyName: s.facultyName,
-          sessionType: s.sessionType,
-          timeSlot: s.timeSlot,
-          classroom: s.classroom,
-          isLocked: s.isLocked || false,
-          totalStudents: s.totalStudents || 0,
-          presentCount: s.presentCount || 0,
-          absentCount: s.absentCount || 0,
-          lateCount: s.lateCount || 0,
-          onLeaveCount: s.onLeaveCount || 0,
-        }).onConflictDoNothing();
+    try {
+      const existingSessions = await db.select().from(schema.sessions);
+      if (existingSessions.length === 0) {
+        const sessToInsert = (Array.isArray(seedData?.sessions) && seedData.sessions.length > 0) ? seedData.sessions : INITIAL_SESSIONS;
+        for (const s of sessToInsert) {
+          await db.insert(schema.sessions).values({
+            id: s.id,
+            date: s.date,
+            departmentId: s.departmentId,
+            programId: s.programId || null,
+            programName: s.programName || null,
+            courseId: s.courseId || null,
+            courseName: s.courseName || null,
+            semester: Number(s.semester) || 1,
+            division: s.division,
+            subjectId: s.subjectId,
+            subjectName: s.subjectName,
+            facultyId: s.facultyId,
+            facultyName: s.facultyName,
+            sessionType: s.sessionType,
+            timeSlot: s.timeSlot,
+            classroom: s.classroom,
+            isLocked: s.isLocked || false,
+            totalStudents: Number(s.totalStudents) || 0,
+            presentCount: Number(s.presentCount) || 0,
+            absentCount: Number(s.absentCount) || 0,
+            lateCount: Number(s.lateCount) || 0,
+            onLeaveCount: Number(s.onLeaveCount) || 0,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (sessErr) {
+      console.error('[initializeDatabase sessions seed]:', sessErr);
     }
 
-    const existingAttRecs = await db.select().from(schema.attendanceRecords);
-    if (existingAttRecs.length === 0) {
-      const recsToInsert = (seedData?.attendanceRecords && seedData.attendanceRecords.length > 0) ? seedData.attendanceRecords : INITIAL_ATTENDANCE_RECORDS;
-      for (const r of recsToInsert) {
-        await db.insert(schema.attendanceRecords).values({
-          id: r.id,
-          sessionId: r.sessionId,
-          studentId: r.studentId,
-          studentRoll: r.studentRoll || null,
-          studentName: r.studentName || null,
-          status: r.status,
-          remarks: r.remarks || null,
-          markedAt: r.markedAt || null,
-          markedBy: r.markedBy || null,
-        }).onConflictDoNothing();
+    try {
+      const existingAttRecs = await db.select().from(schema.attendanceRecords);
+      if (existingAttRecs.length === 0) {
+        const recsToInsert = (Array.isArray(seedData?.attendanceRecords) && seedData.attendanceRecords.length > 0) ? seedData.attendanceRecords : INITIAL_ATTENDANCE_RECORDS;
+        for (const r of recsToInsert) {
+          await db.insert(schema.attendanceRecords).values({
+            id: r.id,
+            sessionId: r.sessionId,
+            studentId: r.studentId,
+            studentRoll: r.studentRoll || null,
+            studentName: r.studentName || null,
+            status: r.status,
+            remarks: r.remarks || null,
+            markedAt: r.markedAt || null,
+            markedBy: r.markedBy || null,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (attErr) {
+      console.error('[initializeDatabase attendanceRecords seed]:', attErr);
     }
 
     // 10. Leaves & Corrections
-    const existingLeaves = await db.select().from(schema.leaves);
-    if (existingLeaves.length === 0) {
-      const leavesToInsert = (seedData?.leaves && seedData.leaves.length > 0) ? seedData.leaves : INITIAL_LEAVES;
-      for (const l of leavesToInsert) {
-        await db.insert(schema.leaves).values({
-          id: l.id,
-          applicantId: l.applicantId,
-          applicantName: l.applicantName,
-          applicantRole: l.applicantRole,
-          applicantRollOrId: l.applicantRollOrId || null,
-          departmentId: l.departmentId || null,
-          leaveType: l.leaveType,
-          startDate: l.startDate,
-          endDate: l.endDate,
-          totalDays: l.totalDays || 1,
-          reason: l.reason || null,
-          medicalDocUrl: l.medicalDocUrl || null,
-          status: l.status,
-          facultyRemarks: l.facultyRemarks || null,
-          hodRemarks: l.hodRemarks || null,
-          createdAt: l.createdAt || null,
-        }).onConflictDoNothing();
+    try {
+      const existingLeaves = await db.select().from(schema.leaves);
+      if (existingLeaves.length === 0) {
+        const leavesToInsert = (Array.isArray(seedData?.leaves) && seedData.leaves.length > 0) ? seedData.leaves : INITIAL_LEAVES;
+        for (const l of leavesToInsert) {
+          await db.insert(schema.leaves).values({
+            id: l.id,
+            applicantId: l.applicantId,
+            applicantName: l.applicantName,
+            applicantRole: l.applicantRole,
+            applicantRollOrId: l.applicantRollOrId || null,
+            departmentId: l.departmentId || null,
+            leaveType: l.leaveType,
+            startDate: l.startDate,
+            endDate: l.endDate,
+            totalDays: Number(l.totalDays) || 1,
+            reason: l.reason || null,
+            medicalDocUrl: l.medicalDocUrl || null,
+            status: l.status,
+            facultyRemarks: l.facultyRemarks || null,
+            hodRemarks: l.hodRemarks || null,
+            createdAt: l.createdAt || null,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (lErr) {
+      console.error('[initializeDatabase leaves seed]:', lErr);
     }
 
     // 11. Results
-    const existingResults = await db.select().from(schema.results);
-    if (existingResults.length === 0) {
-      const resultsToInsert = (seedData?.results && seedData.results.length > 0) ? seedData.results : INITIAL_RESULTS;
-      for (const res of resultsToInsert) {
-        await db.insert(schema.results).values({
-          id: res.id,
-          studentId: res.studentId,
-          studentName: res.studentName,
-          rollNumber: res.rollNumber || null,
-          semester: res.semester,
-          subjectId: res.subjectId || null,
-          subjectCode: res.subjectCode || null,
-          subjectName: res.subjectName,
-          internalMarks: res.internalMarks || 0,
-          externalMarks: res.externalMarks || 0,
-          totalMarks: res.totalMarks || 0,
-          grade: res.grade || null,
-          gpa: res.gpa || 0,
-        }).onConflictDoNothing();
+    try {
+      const existingResults = await db.select().from(schema.results);
+      if (existingResults.length === 0) {
+        const resultsToInsert = (Array.isArray(seedData?.results) && seedData.results.length > 0) ? seedData.results : INITIAL_RESULTS;
+        for (const res of resultsToInsert) {
+          await db.insert(schema.results).values({
+            id: res.id,
+            studentId: res.studentId,
+            studentName: res.studentName,
+            rollNumber: res.rollNumber || null,
+            semester: Number(res.semester) || 1,
+            subjectId: res.subjectId || null,
+            subjectCode: res.subjectCode || null,
+            subjectName: res.subjectName,
+            internalMarks: Number(res.internalMarks) || 0,
+            externalMarks: Number(res.externalMarks) || 0,
+            totalMarks: Number(res.totalMarks) || 0,
+            grade: res.grade || null,
+            gpa: Number(res.gpa) || 0,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (rErr) {
+      console.error('[initializeDatabase results seed]:', rErr);
     }
 
     // 12. Settings
-    const existingSettings = await db.select().from(schema.settings).where(eq(schema.settings.id, 'college_settings'));
-    if (existingSettings.length === 0) {
-      const settingsToInsert = (seedData?.settings && seedData.settings.minimumAttendancePct) ? seedData.settings : INITIAL_SETTINGS;
-      await db.insert(schema.settings).values({
-        id: 'college_settings',
-        data: JSON.stringify(settingsToInsert),
-      }).onConflictDoNothing();
+    try {
+      const existingSettings = await db.select().from(schema.settings).where(eq(schema.settings.id, 'college_settings'));
+      if (existingSettings.length === 0) {
+        const settingsToInsert = (seedData?.settings && seedData.settings.minimumAttendancePct) ? seedData.settings : INITIAL_SETTINGS;
+        await db.insert(schema.settings).values({
+          id: 'college_settings',
+          data: JSON.stringify(settingsToInsert),
+        }).onConflictDoNothing();
+      }
+    } catch (setErr) {
+      console.error('[initializeDatabase settings seed]:', setErr);
     }
 
     // 13. ATKT Records
-    const existingAtkt = await db.select().from(schema.atktRecords);
-    if (existingAtkt.length === 0) {
-      const atktToInsert = (seedData?.atktRecords && seedData.atktRecords.length > 0) ? seedData.atktRecords : INITIAL_ATKT_RECORDS;
-      for (const a of atktToInsert) {
-        await db.insert(schema.atktRecords).values({
-          id: a.id,
-          studentId: a.studentId,
-          studentName: a.studentName,
-          rollNumber: a.rollNumber || null,
-          prnNumber: a.prnNumber || null,
-          course: a.course || null,
-          departmentId: a.departmentId || null,
-          departmentName: a.departmentName || null,
-          semester: a.semester,
-          subjectCode: a.subjectCode || null,
-          subjectName: a.subjectName,
-          backlogType: a.backlogType || null,
-          originalInternalMarks: a.originalInternalMarks || null,
-          originalExternalMarks: a.originalExternalMarks || null,
-          attemptsCount: a.attemptsCount || 1,
-          status: a.status,
-          examFeePaid: a.examFeePaid || false,
-          examFeeAmount: a.examFeeAmount || 0,
-          reExamDate: a.reExamDate || null,
-          reExamMarksObtained: a.reExamMarksObtained || null,
-          clearedAt: a.clearedAt || null,
-          remarks: a.remarks || null,
-        }).onConflictDoNothing();
+    try {
+      const existingAtkt = await db.select().from(schema.atktRecords);
+      if (existingAtkt.length === 0) {
+        const atktToInsert = (Array.isArray(seedData?.atktRecords) && seedData.atktRecords.length > 0) ? seedData.atktRecords : INITIAL_ATKT_RECORDS;
+        for (const a of atktToInsert) {
+          await db.insert(schema.atktRecords).values({
+            id: a.id,
+            studentId: a.studentId,
+            studentName: a.studentName,
+            rollNumber: a.rollNumber || null,
+            prnNumber: a.prnNumber || null,
+            course: a.course || null,
+            departmentId: a.departmentId || null,
+            departmentName: a.departmentName || null,
+            semester: Number(a.semester) || 1,
+            subjectCode: a.subjectCode || null,
+            subjectName: a.subjectName,
+            backlogType: a.backlogType || null,
+            originalInternalMarks: a.originalInternalMarks ? Number(a.originalInternalMarks) : null,
+            originalExternalMarks: a.originalExternalMarks ? Number(a.originalExternalMarks) : null,
+            attemptsCount: Number(a.attemptsCount) || 1,
+            status: a.status,
+            examFeePaid: a.examFeePaid || false,
+            examFeeAmount: Number(a.examFeeAmount) || 0,
+            reExamDate: a.reExamDate || null,
+            reExamMarksObtained: a.reExamMarksObtained ? Number(a.reExamMarksObtained) : null,
+            clearedAt: a.clearedAt || null,
+            remarks: a.remarks || null,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (atktErr) {
+      console.error('[initializeDatabase atktRecords seed]:', atktErr);
     }
 
     // 14. Academic Calendar Events
-    const existingEvents = await db.select().from(schema.academicEvents);
-    if (existingEvents.length === 0) {
-      const eventsToInsert = (seedData?.academicEvents && seedData.academicEvents.length > 0) ? seedData.academicEvents : INITIAL_ACADEMIC_EVENTS;
-      for (const evt of eventsToInsert) {
-        await db.insert(schema.academicEvents).values({
-          id: evt.id,
-          title: evt.title,
-          eventType: evt.eventType,
-          category: evt.category,
-          startDate: evt.startDate,
-          endDate: evt.endDate,
-          isNonWorkingDay: evt.isNonWorkingDay !== undefined ? evt.isNonWorkingDay : true,
-          description: evt.description || null,
-          departmentId: evt.departmentId || null,
-          departmentName: evt.departmentName || null,
-          createdBy: evt.createdBy || 'Admin',
-          createdAt: evt.createdAt || new Date().toISOString().substring(0, 10),
-        }).onConflictDoNothing();
+    try {
+      const existingEvents = await db.select().from(schema.academicEvents);
+      if (existingEvents.length === 0) {
+        const eventsToInsert = (Array.isArray(seedData?.academicEvents) && seedData.academicEvents.length > 0) ? seedData.academicEvents : INITIAL_ACADEMIC_EVENTS;
+        for (const evt of eventsToInsert) {
+          await db.insert(schema.academicEvents).values({
+            id: evt.id,
+            title: evt.title,
+            eventType: evt.eventType,
+            category: evt.category,
+            startDate: evt.startDate,
+            endDate: evt.endDate,
+            isNonWorkingDay: evt.isNonWorkingDay !== undefined ? evt.isNonWorkingDay : true,
+            description: evt.description || null,
+            departmentId: evt.departmentId || null,
+            departmentName: evt.departmentName || null,
+            createdBy: evt.createdBy || 'Admin',
+            createdAt: evt.createdAt || new Date().toISOString().substring(0, 10),
+          }).onConflictDoNothing();
+        }
       }
+    } catch (evtErr) {
+      console.error('[initializeDatabase academicEvents seed]:', evtErr);
     }
 
     // 15. Audit Logs
-    const existingLogs = await db.select().from(schema.auditLogs);
-    if (existingLogs.length === 0) {
-      const logsToInsert = (seedData?.auditLogs && seedData.auditLogs.length > 0) ? seedData.auditLogs : INITIAL_AUDIT_LOGS;
-      for (const log of logsToInsert) {
-        await db.insert(schema.auditLogs).values({
-          id: log.id,
-          timestamp: log.timestamp,
-          actorName: log.actorName || null,
-          actorRole: log.actorRole || null,
-          action: log.action,
-          category: log.category,
-          details: log.details,
-          ipAddress: log.ipAddress || null,
-        }).onConflictDoNothing();
+    try {
+      const existingLogs = await db.select().from(schema.auditLogs);
+      if (existingLogs.length === 0) {
+        const logsToInsert = (Array.isArray(seedData?.auditLogs) && seedData.auditLogs.length > 0) ? seedData.auditLogs : INITIAL_AUDIT_LOGS;
+        for (const log of logsToInsert) {
+          await db.insert(schema.auditLogs).values({
+            id: log.id,
+            timestamp: log.timestamp,
+            actorName: log.actorName || null,
+            actorRole: log.actorRole || null,
+            action: log.action,
+            category: log.category,
+            details: log.details,
+            ipAddress: log.ipAddress || null,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (logErr) {
+      console.error('[initializeDatabase auditLogs seed]:', logErr);
     }
 
     // 16. Chat Conversations & Messages
-    const existingChatConvs = await db.select().from(schema.chatConversations);
-    if (existingChatConvs.length === 0) {
-      const convsToInsert = (seedData?.chatConversations && seedData.chatConversations.length > 0) ? seedData.chatConversations : INITIAL_CHAT_CONVERSATIONS;
-      for (const conv of convsToInsert) {
-        await db.insert(schema.chatConversations).values({
-          id: conv.id,
-          participantId: conv.participantId,
-          participantName: conv.participantName,
-          participantRole: conv.participantRole,
-          participantAvatar: conv.participantAvatar || null,
-          participantStatus: conv.participantStatus || 'Offline',
-          lastMessage: conv.lastMessage || null,
-          lastMessageTime: conv.lastMessageTime || null,
-          unreadCount: conv.unreadCount || 0,
-        }).onConflictDoNothing();
+    try {
+      const existingChatConvs = await db.select().from(schema.chatConversations);
+      if (existingChatConvs.length === 0) {
+        const convsToInsert = (Array.isArray(seedData?.chatConversations) && seedData.chatConversations.length > 0) ? seedData.chatConversations : INITIAL_CHAT_CONVERSATIONS;
+        for (const conv of convsToInsert) {
+          await db.insert(schema.chatConversations).values({
+            id: conv.id,
+            participantId: conv.participantId,
+            participantName: conv.participantName,
+            participantRole: conv.participantRole,
+            participantAvatar: conv.participantAvatar || null,
+            participantStatus: conv.participantStatus || 'Offline',
+            lastMessage: conv.lastMessage || null,
+            lastMessageTime: conv.lastMessageTime || null,
+            unreadCount: Number(conv.unreadCount) || 0,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (convErr) {
+      console.error('[initializeDatabase chatConversations seed]:', convErr);
     }
 
-    const existingChatMsgs = await db.select().from(schema.chatMessages);
-    if (existingChatMsgs.length === 0) {
-      const msgsToInsert = (seedData?.chatMessages && seedData.chatMessages.length > 0) ? seedData.chatMessages : INITIAL_CHAT_MESSAGES;
-      for (const msg of msgsToInsert) {
-        await db.insert(schema.chatMessages).values({
-          id: msg.id,
-          conversationId: msg.conversationId,
-          senderId: msg.senderId,
-          senderName: msg.senderName,
-          senderRole: msg.senderRole,
-          senderAvatar: msg.senderAvatar || null,
-          text: msg.text,
-          attachmentUrl: msg.attachmentUrl || null,
-          attachmentType: msg.attachmentType || null,
-          createdAt: msg.createdAt,
-          isRead: msg.isRead || false,
-        }).onConflictDoNothing();
+    try {
+      const existingChatMsgs = await db.select().from(schema.chatMessages);
+      if (existingChatMsgs.length === 0) {
+        const msgsToInsert = (Array.isArray(seedData?.chatMessages) && seedData.chatMessages.length > 0) ? seedData.chatMessages : INITIAL_CHAT_MESSAGES;
+        for (const msg of msgsToInsert) {
+          await db.insert(schema.chatMessages).values({
+            id: msg.id,
+            conversationId: msg.conversationId,
+            senderId: msg.senderId,
+            senderName: msg.senderName,
+            senderRole: msg.senderRole,
+            senderAvatar: msg.senderAvatar || null,
+            text: msg.text,
+            attachmentUrl: msg.attachmentUrl || null,
+            attachmentType: msg.attachmentType || null,
+            createdAt: msg.createdAt,
+            isRead: msg.isRead || false,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (msgErr) {
+      console.error('[initializeDatabase chatMessages seed]:', msgErr);
     }
 
     // 17. Import Logs
-    const existingImportLogs = await db.select().from(schema.importLogs);
-    if (existingImportLogs.length === 0) {
-      const importsToInsert = (seedData?.importLogs && seedData.importLogs.length > 0) ? seedData.importLogs : INITIAL_IMPORT_LOGS;
-      for (const imp of importsToInsert) {
-        await db.insert(schema.importLogs).values({
-          id: imp.id,
-          fileName: imp.fileName,
-          uploadedAt: imp.uploadedAt,
-          uploadedBy: imp.uploadedBy,
-          totalRecords: imp.totalRecords || 0,
-          importedCount: imp.importedCount || 0,
-          updatedCount: imp.updatedCount || 0,
-          skippedCount: imp.skippedCount || 0,
-          status: imp.status,
-        }).onConflictDoNothing();
+    try {
+      const existingImportLogs = await db.select().from(schema.importLogs);
+      if (existingImportLogs.length === 0) {
+        const importsToInsert = (Array.isArray(seedData?.importLogs) && seedData.importLogs.length > 0) ? seedData.importLogs : INITIAL_IMPORT_LOGS;
+        for (const imp of importsToInsert) {
+          await db.insert(schema.importLogs).values({
+            id: imp.id,
+            fileName: imp.fileName,
+            uploadedAt: imp.uploadedAt,
+            uploadedBy: imp.uploadedBy,
+            totalRecords: Number(imp.totalRecords) || 0,
+            importedCount: Number(imp.importedCount) || 0,
+            updatedCount: Number(imp.updatedCount) || 0,
+            skippedCount: Number(imp.skippedCount) || 0,
+            status: imp.status,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (impErr) {
+      console.error('[initializeDatabase importLogs seed]:', impErr);
     }
 
     // 18. Promotion History
-    const existingPromos = await db.select().from(schema.promotionHistory);
-    if (existingPromos.length === 0) {
-      const promosToInsert = (seedData?.promotionHistory && seedData.promotionHistory.length > 0) ? seedData.promotionHistory : INITIAL_PROMOTION_HISTORY;
-      for (const promo of promosToInsert) {
-        await db.insert(schema.promotionHistory).values({
-          id: promo.id,
-          batchName: promo.batchName,
-          promotedAt: promo.promotedAt,
-          promotedBy: promo.promotedBy,
-          program: promo.program,
-          course: promo.course,
-          fromSemester: promo.fromSemester,
-          toSemester: promo.toSemester,
-          totalStudentsPromoted: promo.totalStudentsPromoted || 0,
-          status: promo.status,
-          records: promo.records ? JSON.stringify(promo.records) : null,
-        }).onConflictDoNothing();
+    try {
+      const existingPromos = await db.select().from(schema.promotionHistory);
+      if (existingPromos.length === 0) {
+        const promosToInsert = (Array.isArray(seedData?.promotionHistory) && seedData.promotionHistory.length > 0) ? seedData.promotionHistory : INITIAL_PROMOTION_HISTORY;
+        for (const promo of promosToInsert) {
+          await db.insert(schema.promotionHistory).values({
+            id: promo.id,
+            batchName: promo.batchName,
+            promotedAt: promo.promotedAt,
+            promotedBy: promo.promotedBy,
+            program: promo.program,
+            course: promo.course,
+            fromSemester: Number(promo.fromSemester) || 1,
+            toSemester: Number(promo.toSemester) || 2,
+            totalStudentsPromoted: Number(promo.totalStudentsPromoted) || 0,
+            status: promo.status,
+            records: promo.records ? JSON.stringify(promo.records) : null,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (promoErr) {
+      console.error('[initializeDatabase promotionHistory seed]:', promoErr);
     }
 
     // 19. Class Teacher Assignments
-    const existingClassTeachers = await db.select().from(schema.classTeacherAssignments);
-    if (existingClassTeachers.length === 0) {
-      const ctToInsert = (seedData?.classTeachers && seedData.classTeachers.length > 0) ? seedData.classTeachers : INITIAL_CLASS_TEACHERS;
-      for (const ct of ctToInsert) {
-        await db.insert(schema.classTeacherAssignments).values({
-          id: ct.id,
-          departmentId: ct.departmentId,
-          departmentName: ct.departmentName,
-          courseId: ct.courseId,
-          courseCode: ct.courseCode,
-          courseName: ct.courseName,
-          academicYear: ct.academicYear,
-          semester: ct.semester,
-          division: ct.division,
-          classTeacherId: ct.classTeacherId,
-          classTeacherName: ct.classTeacherName,
-          assistantTeacherId: ct.assistantTeacherId || null,
-          assistantTeacherName: ct.assistantTeacherName || null,
-          classroom: ct.classroom,
-          academicSession: ct.academicSession,
-          assignedAt: ct.assignedAt,
-          assignedBy: ct.assignedBy,
-        }).onConflictDoNothing();
+    try {
+      const existingClassTeachers = await db.select().from(schema.classTeacherAssignments);
+      if (existingClassTeachers.length === 0) {
+        const ctToInsert = (Array.isArray(seedData?.classTeachers) && seedData.classTeachers.length > 0) ? seedData.classTeachers : INITIAL_CLASS_TEACHERS;
+        for (const ct of ctToInsert) {
+          await db.insert(schema.classTeacherAssignments).values({
+            id: ct.id,
+            departmentId: ct.departmentId,
+            departmentName: ct.departmentName,
+            courseId: ct.courseId,
+            courseCode: ct.courseCode,
+            courseName: ct.courseName,
+            academicYear: ct.academicYear,
+            semester: Number(ct.semester) || 1,
+            division: ct.division,
+            classTeacherId: ct.classTeacherId,
+            classTeacherName: ct.classTeacherName,
+            assistantTeacherId: ct.assistantTeacherId || null,
+            assistantTeacherName: ct.assistantTeacherName || null,
+            classroom: ct.classroom,
+            academicSession: ct.academicSession,
+            assignedAt: ct.assignedAt,
+            assignedBy: ct.assignedBy,
+          }).onConflictDoNothing();
+        }
       }
+    } catch (ctErr) {
+      console.error('[initializeDatabase classTeacherAssignments seed]:', ctErr);
     }
 
     console.log('[Cloud SQL] SQL Database tables initialized and ready.');
