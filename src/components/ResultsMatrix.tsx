@@ -42,18 +42,18 @@ export const ResultsMatrix: React.FC<ResultsMatrixProps> = ({
   const [selectedSem, setSelectedSem] = useState<string>('3');
   const [selectedDiv, setSelectedDiv] = useState<string>('ALL');
   const [searchRollNo, setSearchRollNo] = useState<string>('');
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || 'stu-24cs01');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
 
   // Modal State for HOD Edit / Add
   const [showModal, setShowModal] = useState(false);
   const [editingResult, setEditingResult] = useState<StudentResult | null>(null);
-  const [subCode, setSubCode] = useState('CS301');
-  const [subName, setSubName] = useState('Data Structures & Algorithms');
-  const [semVal, setSemVal] = useState(3);
-  const [internalMarks, setInternalMarks] = useState(34);
-  const [externalMarks, setExternalMarks] = useState(52);
-  const [grade, setGrade] = useState('A+');
-  const [gpaPoints, setGpaPoints] = useState(9.0);
+  const [subCode, setSubCode] = useState('');
+  const [subName, setSubName] = useState('');
+  const [semVal, setSemVal] = useState(1);
+  const [internalMarks, setInternalMarks] = useState(0);
+  const [externalMarks, setExternalMarks] = useState(0);
+  const [grade, setGrade] = useState('O');
+  const [gpaPoints, setGpaPoints] = useState(10.0);
 
   const canEdit = userRole === 'Admin' || userRole === 'HOD';
 
@@ -84,13 +84,13 @@ export const ResultsMatrix: React.FC<ResultsMatrixProps> = ({
 
   const handleOpenAdd = () => {
     setEditingResult(null);
-    setSubCode('CS305');
-    setSubName('Database Management Systems');
-    setSemVal(Number(selectedSem === 'ALL' ? 3 : selectedSem));
-    setInternalMarks(32);
-    setExternalMarks(48);
-    setGrade('A');
-    setGpaPoints(8.5);
+    setSubCode('');
+    setSubName('');
+    setSemVal(Number(selectedSem === 'ALL' ? (selectedStudent?.semester || 1) : selectedSem));
+    setInternalMarks(0);
+    setExternalMarks(0);
+    setGrade('O');
+    setGpaPoints(10.0);
     setShowModal(true);
   };
 

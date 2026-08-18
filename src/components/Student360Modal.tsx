@@ -147,91 +147,9 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
     return 'text-rose-600 bg-rose-50 border-rose-200';
   };
 
-  const departmentActivities = (activeStudent.departmentActivities && activeStudent.departmentActivities.length > 0)
-    ? activeStudent.departmentActivities
-    : [
-        {
-          id: 'act-1',
-          type: 'Research Projects' as const,
-          title: 'Algorithmic Stock Trading & FinTech Machine Learning Model',
-          date: '2026-03-15',
-          organizer: 'Dept. of Accounting & Finance',
-          roleOrPosition: 'Lead Student Researcher',
-          description: 'Designed and presented a financial research project on predictive analytics in capital markets.',
-          photoUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=500',
-        },
-        {
-          id: 'act-2',
-          type: 'Seminars' as const,
-          title: 'National Seminar on GST Return Filing & Corporate Tax Reforms',
-          date: '2026-02-10',
-          organizer: 'Internal Quality Assurance Cell (IQAC)',
-          roleOrPosition: 'Delegate & Paper Presenter',
-          description: 'Participated in a state-level seminar on recent GST amendments and tax compliance.',
-        },
-        {
-          id: 'act-3',
-          type: 'Internships' as const,
-          title: 'Tax Analyst Internship at Deloitte Haskins & Sells',
-          date: '2025-12-01',
-          organizer: 'Corporate Placement Cell',
-          roleOrPosition: 'Taxation Intern',
-          description: 'Assisted senior audit associates with corporate tax filings, TDS reconciliation, and financial audit reports.',
-        },
-        {
-          id: 'act-4',
-          type: 'Achievements' as const,
-          title: '1st Rank Holder in University Mock Stock Exchange Competition',
-          date: '2025-11-20',
-          organizer: 'Mumbai University Commerce Association',
-          roleOrPosition: 'Champion / Gold Medalist',
-          description: 'Secured first rank out of 180 participating colleges in portfolio optimization.',
-        },
-        {
-          id: 'act-5',
-          type: 'Awards' as const,
-          title: 'Institutional Academic Excellence & Outstanding Leadership Award',
-          date: '2025-10-15',
-          organizer: 'Janardan Bhagat Shikshan Prasarak Sanstha',
-          roleOrPosition: 'Awardee',
-          description: 'Conferred highest student honor for maintaining 9.5+ CGPA and leading student council.',
-        },
-        {
-          id: 'act-6',
-          type: 'Competitions' as const,
-          title: 'Inter-College Business Plan & FinTech Innovation Competition',
-          date: '2025-09-05',
-          organizer: 'CKT Entrepreneurship Cell',
-          roleOrPosition: '1st Runner-Up',
-          description: 'Pitched an AI-driven automated micro-invoicing platform for local MSME vendors.',
-        },
-        {
-          id: 'act-7',
-          type: 'Volunteer Activities' as const,
-          title: 'NSS Financial Literacy & Digital Payment Security Drive',
-          date: '2025-08-12',
-          organizer: 'NSS Unit CKT College',
-          roleOrPosition: 'Lead Student Volunteer',
-          description: 'Educated over 350 rural villagers on UPI fraud prevention and digital banking safety.',
-        },
-        {
-          id: 'act-8',
-          type: 'Other' as const,
-          title: 'Annual College Cultural & Commerce Fest Main Coordinator',
-          date: '2025-07-25',
-          organizer: 'Student Welfare Association',
-          roleOrPosition: 'Event Head',
-          description: 'Managed logistics, budgeting, and sponsorship drives for 2,500+ fest attendees.',
-        },
-      ];
+  const departmentActivities = activeStudent.departmentActivities || [];
 
-  const sampleSubjects: SubjectDetail[] = student.registeredSubjectsDetails || [
-    { subjectCode: 'AF401', subjectName: 'Financial Accounting – IV', facultyName: 'Prof. Amit Patel', credits: 4, attendancePct: 92, internalMarks: 36, externalMarks: 52, totalMarks: 88, grade: 'O' },
-    { subjectCode: 'AF402', subjectName: 'Financial Management – I', facultyName: 'Prof. Priya Deshmukh', credits: 4, attendancePct: 86, internalMarks: 34, externalMarks: 48, totalMarks: 82, grade: 'A+' },
-    { subjectCode: 'AF403', subjectName: 'Taxation – I (Direct Taxes)', facultyName: 'Dr. Sunita Kulkarni', credits: 3, attendancePct: 89, internalMarks: 32, externalMarks: 46, totalMarks: 78, grade: 'A' },
-    { subjectCode: 'AF404', subjectName: 'Business Economics – II', facultyName: 'Prof. Amit Patel', credits: 3, attendancePct: 90, internalMarks: 35, externalMarks: 50, totalMarks: 85, grade: 'A+' },
-    { subjectCode: 'AF405', subjectName: 'Auditing & Corporate Governance', facultyName: 'Prof. Priya Deshmukh', credits: 3, attendancePct: 84, internalMarks: 30, externalMarks: 44, totalMarks: 74, grade: 'B+' },
-  ];
+  const sampleSubjects: SubjectDetail[] = student.registeredSubjectsDetails || [];
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -1185,7 +1103,7 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
                 <div className="flex items-center gap-4 bg-white/80 p-3 rounded-xl border border-indigo-100 shadow-sm">
                   <div>
                     <p className="text-[10px] uppercase font-bold text-slate-500">Overall CGPA</p>
-                    <p className="text-2xl font-black text-indigo-600">{student.overallCgpa || '9.08'}</p>
+                    <p className="text-2xl font-black text-indigo-600">{student.overallCgpa ? student.overallCgpa.toFixed(2) : '0.00'}</p>
                   </div>
                   <div className="border-l border-slate-200 pl-4">
                     <p className="text-[10px] uppercase font-bold text-slate-500">Course</p>
@@ -1197,11 +1115,7 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
               {/* Semester Breakdown Tables */}
               <div className="space-y-4">
                 {['FY', 'SY', 'TY', 'M.Com Part 1', 'M.Com Part 2'].map((prog) => {
-                  const perfItems = (student.academicPerformance || []).filter((p) => p.program === prog);
-                  const displayItems = perfItems.length > 0 ? perfItems : [
-                    { semesterId: `${prog}-1`, program: prog as any, semesterNumber: 1, division: 'A', divisionOptions: ['A'], gpa: 8.8, percentage: 83.6, resultStatus: 'PASS' as const, academicYear: '2023-2024' },
-                    { semesterId: `${prog}-2`, program: prog as any, semesterNumber: 2, division: 'A', divisionOptions: ['A'], gpa: 9.1, percentage: 86.4, resultStatus: 'PASS' as const, academicYear: '2023-2024' },
-                  ];
+                  const displayItems = (student.academicPerformance || []).filter((p) => p.program === prog);
 
                   return (
                     <div key={prog} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -1223,43 +1137,51 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 font-medium">
-                            {displayItems.map((item, idx) => (
-                              <tr key={item.semesterId || idx} className="hover:bg-slate-50/50">
-                                <td className="px-4 py-3 font-semibold text-slate-800">
-                                  Sem {item.semesterNumber}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold border border-slate-200">
-                                    Div {item.division || 'A'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 font-bold text-indigo-600">
-                                  {item.gpa > 0 ? item.gpa.toFixed(2) : '8.92'}
-                                </td>
-                                <td className="px-4 py-3 font-bold text-slate-800">
-                                  {item.gpa > 0 ? (item.gpa - 0.05).toFixed(2) : '8.88'}
-                                </td>
-                                <td className="px-4 py-3 font-semibold text-slate-700">
-                                  {item.percentage > 0 ? `${item.percentage}%` : '84.5%'}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span
-                                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                                      item.resultStatus === 'PASS'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        : item.resultStatus === 'FAIL'
-                                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                                    }`}
-                                  >
-                                    {item.resultStatus}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-slate-600">
-                                  {item.academicYear || student.academicYear}
+                            {displayItems.length > 0 ? (
+                              displayItems.map((item, idx) => (
+                                <tr key={item.semesterId || idx} className="hover:bg-slate-50/50">
+                                  <td className="px-4 py-3 font-semibold text-slate-800">
+                                    Sem {item.semesterNumber}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-bold border border-slate-200">
+                                      Div {item.division || 'A'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 font-bold text-indigo-600">
+                                    {item.gpa > 0 ? item.gpa.toFixed(2) : '-'}
+                                  </td>
+                                  <td className="px-4 py-3 font-bold text-slate-800">
+                                    {item.gpa > 0 ? (item.gpa - 0.05).toFixed(2) : '-'}
+                                  </td>
+                                  <td className="px-4 py-3 font-semibold text-slate-700">
+                                    {item.percentage > 0 ? `${item.percentage}%` : '-'}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                                        item.resultStatus === 'PASS'
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : item.resultStatus === 'FAIL'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                                      }`}
+                                    >
+                                      {item.resultStatus}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-slate-600">
+                                    {item.academicYear || student.academicYear}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={7} className="px-4 py-6 text-center text-slate-400 font-normal">
+                                  No examination / GPA records recorded for {prog}.
                                 </td>
                               </tr>
-                            ))}
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1299,21 +1221,29 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                    {sampleSubjects.map((sub) => (
-                      <tr key={sub.subjectCode} className="hover:bg-slate-50/50">
-                        <td className="px-4 py-3 font-mono font-bold text-indigo-600">{sub.subjectCode}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">{sub.subjectName}</td>
-                        <td className="px-4 py-3 text-slate-600">{sub.facultyName}</td>
-                        <td className="px-4 py-3 font-semibold">{sub.credits}</td>
-                        <td className="px-4 py-3 font-bold text-emerald-600">{sub.attendancePct}%</td>
-                        <td className="px-4 py-3 font-semibold text-slate-800">{sub.internalMarks}</td>
-                        <td className="px-4 py-3 font-semibold text-slate-800">{sub.externalMarks}</td>
-                        <td className="px-4 py-3 font-black text-slate-900">{sub.totalMarks}</td>
-                        <td className="px-4 py-3 font-bold text-indigo-700">
-                          <span className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200">{sub.grade}</span>
+                    {sampleSubjects.length > 0 ? (
+                      sampleSubjects.map((sub) => (
+                        <tr key={sub.subjectCode} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-3 font-mono font-bold text-indigo-600">{sub.subjectCode}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-900">{sub.subjectName}</td>
+                          <td className="px-4 py-3 text-slate-600">{sub.facultyName}</td>
+                          <td className="px-4 py-3 font-semibold">{sub.credits}</td>
+                          <td className="px-4 py-3 font-bold text-emerald-600">{sub.attendancePct}%</td>
+                          <td className="px-4 py-3 font-semibold text-slate-800">{sub.internalMarks}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-800">{sub.externalMarks}</td>
+                          <td className="px-4 py-3 font-black text-slate-900">{sub.totalMarks}</td>
+                          <td className="px-4 py-3 font-bold text-indigo-700">
+                            <span className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200">{sub.grade}</span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-6 text-center text-slate-400 font-normal">
+                          No subjects currently registered.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1333,34 +1263,40 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {departmentActivities.map((act) => (
-                  <div key={act.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
-                          {act.type}
-                        </span>
-                        <h4 className="text-xs font-bold text-slate-900 mt-1">{act.title}</h4>
+              {departmentActivities.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {departmentActivities.map((act) => (
+                    <div key={act.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
+                            {act.type}
+                          </span>
+                          <h4 className="text-xs font-bold text-slate-900 mt-1">{act.title}</h4>
+                        </div>
+                        <span className="text-[10px] font-medium text-slate-400 shrink-0">{act.date}</span>
                       </div>
-                      <span className="text-[10px] font-medium text-slate-400 shrink-0">{act.date}</span>
-                    </div>
 
-                    <p className="text-xs text-slate-600 line-clamp-2">{act.description}</p>
+                      <p className="text-xs text-slate-600 line-clamp-2">{act.description}</p>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                      <span className="text-slate-500">Role/Position: <strong className="text-slate-800">{act.roleOrPosition}</strong></span>
-                      <span className="text-[11px] text-indigo-600 font-semibold">{act.organizer}</span>
-                    </div>
-
-                    {act.photoUrl && (
-                      <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 h-28">
-                        <img src={act.photoUrl} alt={act.title} className="w-full h-full object-cover" />
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                        <span className="text-slate-500">Role/Position: <strong className="text-slate-800">{act.roleOrPosition}</strong></span>
+                        <span className="text-[11px] text-indigo-600 font-semibold">{act.organizer}</span>
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+
+                      {act.photoUrl && (
+                        <div className="mt-2 rounded-lg overflow-hidden border border-slate-200 h-28">
+                          <img src={act.photoUrl} alt={act.title} className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400 text-xs">
+                  No department activities or achievements logged yet.
+                </div>
+              )}
             </div>
           )}
 
@@ -1370,16 +1306,22 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-700 mb-2">Technical Skills & Software Tools</h3>
                 <div className="flex flex-wrap gap-2">
-                  {(student.technicalSkills || ['Tally Prime', 'Advanced Excel', 'Financial Modeling', 'GST Return Filing', 'Power BI', 'SQL']).map((sk, idx) => (
-                    <span key={`ts-${sk}-${idx}`} className="text-xs font-medium px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
-                      {typeof sk === 'string' ? sk : String(sk)}
-                    </span>
-                  ))}
-                  {(student.programmingLanguages || ['Python for Finance', 'R Data Analytics', 'SQL', 'Excel VBA']).map((lang, idx) => (
-                    <span key={`pl-${lang}-${idx}`} className="text-xs font-medium px-3 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-100">
-                      {typeof lang === 'string' ? lang : String(lang)}
-                    </span>
-                  ))}
+                  {(student.technicalSkills || []).length > 0 || (student.programmingLanguages || []).length > 0 ? (
+                    <>
+                      {(student.technicalSkills || []).map((sk, idx) => (
+                        <span key={`ts-${sk}-${idx}`} className="text-xs font-medium px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {typeof sk === 'string' ? sk : String(sk)}
+                        </span>
+                      ))}
+                      {(student.programmingLanguages || []).map((lang, idx) => (
+                        <span key={`pl-${lang}-${idx}`} className="text-xs font-medium px-3 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-100">
+                          {typeof lang === 'string' ? lang : String(lang)}
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-400">No technical skills added yet.</p>
+                  )}
                 </div>
               </div>
 
@@ -1387,42 +1329,45 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h4 className="text-xs font-bold uppercase text-slate-700 mb-2">Projects & Internships</h4>
                   <div className="space-y-3">
-                    {(student.projects || [
-                      { title: 'Corporate Tax Planning & GST Audit Project', description: 'Comprehensive study on tax minimization strategies for MSMEs.', techStack: 'Tally Prime, Excel, Income Tax Portal' }
-                    ]).map((p, idx) => (
-                      <div key={`proj-${idx}`} className="bg-white p-3 rounded-lg border border-slate-200">
-                        <p className="text-xs font-bold text-slate-800">{p.title}</p>
-                        <p className="text-[11px] text-slate-600 mt-0.5">{p.description}</p>
-                        <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mt-2 inline-block">
-                          {p.techStack}
-                        </span>
-                      </div>
-                    ))}
+                    {(student.projects || []).length > 0 ? (
+                      (student.projects || []).map((p, idx) => (
+                        <div key={`proj-${idx}`} className="bg-white p-3 rounded-lg border border-slate-200">
+                          <p className="text-xs font-bold text-slate-800">{p.title}</p>
+                          <p className="text-[11px] text-slate-600 mt-0.5">{p.description}</p>
+                          <span className="text-[10px] font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mt-2 inline-block">
+                            {p.techStack}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400">No projects or internships added yet.</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <h4 className="text-xs font-bold uppercase text-slate-700 mb-2">Certifications & Achievements</h4>
                   <div className="space-y-3">
-                    {(student.certifications || [
-                      { title: 'NISM Series V-A: Mutual Fund Distributors Certification', issuer: 'National Institute of Securities Markets', year: '2024' },
-                      { title: 'Certificate in Financial Risk Analytics', issuer: 'NSE Academy', year: '2023' }
-                    ]).map((c, idx) => {
-                      const isObj = typeof c === 'object' && c !== null;
-                      const title = isObj ? (c as any).title || 'Certificate' : String(c);
-                      const issuer = isObj ? (c as any).issuer || '' : '';
-                      const year = isObj ? (c as any).year || '' : '';
+                    {(student.certifications || []).length > 0 ? (
+                      (student.certifications || []).map((c, idx) => {
+                        const isObj = typeof c === 'object' && c !== null;
+                        const title = isObj ? (c as any).title || 'Certificate' : String(c);
+                        const issuer = isObj ? (c as any).issuer || '' : '';
+                        const year = isObj ? (c as any).year || '' : '';
 
-                      return (
-                        <div key={`modal-cert-${idx}`} className="bg-white p-3 rounded-lg border border-slate-200 flex justify-between items-center">
-                          <div>
-                            <p className="text-xs font-bold text-slate-800">{title}</p>
-                            {issuer && <p className="text-[11px] text-slate-500">{issuer}</p>}
+                        return (
+                          <div key={`modal-cert-${idx}`} className="bg-white p-3 rounded-lg border border-slate-200 flex justify-between items-center">
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">{title}</p>
+                              {issuer && <p className="text-[11px] text-slate-500">{issuer}</p>}
+                            </div>
+                            {year && <span className="text-xs font-semibold text-slate-600">{year}</span>}
                           </div>
-                          {year && <span className="text-xs font-semibold text-slate-600">{year}</span>}
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-400">No certifications recorded yet.</p>
+                    )}
                   </div>
                 </div>
               </div>

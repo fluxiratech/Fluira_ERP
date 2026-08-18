@@ -1228,10 +1228,10 @@ export async function initializeDatabase(seedData?: any) {
       DELETE FROM sessions WHERE id = 'sess-1';
       DELETE FROM attendance_records WHERE id IN ('att-1-1', 'att-1-9');
       DELETE FROM leaves WHERE id = 'leave-1';
-      DELETE FROM results WHERE id IN ('res-1', 'res-3');
+      DELETE FROM results WHERE id IN ('res-1', 'res-2', 'res-3', 'res-4', 'res-5');
       DELETE FROM atkt_records WHERE id = 'atkt-1';
       DELETE FROM notices WHERE id = 'notice-1';
-      DELETE FROM department_activities WHERE id = 'act-1';
+      DELETE FROM department_activities WHERE id IN ('act-1', 'act-2', 'act-3');
       DELETE FROM timetable WHERE id IN ('tt-1', 'tt-2', 'tt-3', 'tt-4');
       DELETE FROM class_teacher_assignments WHERE id IN ('ct-1', 'ct-2');
       DELETE FROM chat_conversations WHERE id IN ('conv-1', 'conv-2', 'conv-3', 'conv-4');
