@@ -1720,7 +1720,15 @@ export async function initializeDatabase(seedData?: any) {
     try {
       const existingChatMsgs = await db.select().from(schema.chatMessages);
       if (existingChatMsgs.length === 0) {
-        const msgsToInsert = (Array.isArray(seedData?.chatMessages) && seedData.chatMessages.length > 0) ? seedData.chatMessages : INITIAL_CHAT_MESSAGES;
+        let msgsToInsert: any[] = [];
+        if (Array.isArray(seedData?.chatMessages) && seedData.chatMessages.length > 0) {
+          msgsToInsert = seedData.chatMessages;
+        } else if (seedData?.chatMessages && typeof seedData.chatMessages === 'object') {
+          msgsToInsert = Object.values(seedData.chatMessages).flat();
+        } else {
+          msgsToInsert = Object.values(INITIAL_CHAT_MESSAGES).flat();
+        }
+
         for (const msg of msgsToInsert) {
           try {
             const validated = validateChatMessageRecord(msg);
@@ -3632,6 +3640,29 @@ export async function insertAuditLog(log: AuditLog): Promise<AuditLog> {
 export async function getAllChatConversations(): Promise<ChatConversation[]> {
   try {
     const rows = await db.select().from(schema.chatConversations);
+    if (rows.length === 0) {
+      for (const conv of INITIAL_CHAT_CONVERSATIONS) {
+        try {
+          const validated = validateChatConversationRecord(conv);
+          await db.insert(schema.chatConversations).values(validated).onConflictDoNothing();
+        } catch (e) {}
+      }
+      const recheck = await db.select().from(schema.chatConversations);
+      if (recheck.length > 0) {
+        return recheck.map((r) => ({
+          id: r.id,
+          participantId: r.participantId,
+          participantName: r.participantName,
+          participantRole: r.participantRole as any,
+          participantAvatar: r.participantAvatar || undefined,
+          participantStatus: (r.participantStatus as any) || 'Offline',
+          lastMessage: r.lastMessage || '',
+          lastMessageTime: r.lastMessageTime || '',
+          unreadCount: Number(r.unreadCount) || 0,
+        }));
+      }
+    }
+
     return rows.map((r) => ({
       id: r.id,
       participantId: r.participantId,
@@ -3650,17 +3681,8 @@ export async function getAllChatConversations(): Promise<ChatConversation[]> {
 }
 
 export async function insertChatConversation(c: ChatConversation): Promise<ChatConversation> {
-  await db.insert(schema.chatConversations).values({
-    id: c.id,
-    participantId: c.participantId,
-    participantName: c.participantName,
-    participantRole: c.participantRole,
-    participantAvatar: c.participantAvatar || null,
-    participantStatus: c.participantStatus || 'Offline',
-    lastMessage: c.lastMessage || null,
-    lastMessageTime: c.lastMessageTime || null,
-    unreadCount: c.unreadCount || 0,
-  });
+  const validated = validateChatConversationRecord(c);
+  await db.insert(schema.chatConversations).values(validated).onConflictDoNothing();
   return c;
 }
 
@@ -3691,6 +3713,37 @@ export async function deleteChatConversation(id: string): Promise<boolean> {
 export async function getAllChatMessages(): Promise<Record<string, ChatMessage[]>> {
   try {
     const rows = await db.select().from(schema.chatMessages);
+    if (rows.length === 0) {
+      const initialFlat = Object.values(INITIAL_CHAT_MESSAGES).flat();
+      for (const msg of initialFlat) {
+        try {
+          const validated = validateChatMessageRecord(msg);
+          await db.insert(schema.chatMessages).values(validated).onConflictDoNothing();
+        } catch (e) {}
+      }
+      const recheck = await db.select().from(schema.chatMessages);
+      const result: Record<string, ChatMessage[]> = {};
+      for (const r of recheck) {
+        if (!result[r.conversationId]) {
+          result[r.conversationId] = [];
+        }
+        result[r.conversationId].push({
+          id: r.id,
+          conversationId: r.conversationId,
+          senderId: r.senderId,
+          senderName: r.senderName,
+          senderRole: r.senderRole as any,
+          senderAvatar: r.senderAvatar || undefined,
+          text: r.text,
+          attachmentUrl: r.attachmentUrl || undefined,
+          attachmentType: (r.attachmentType as any) || undefined,
+          createdAt: r.createdAt,
+          isRead: Boolean(r.isRead),
+        });
+      }
+      return result;
+    }
+
     const result: Record<string, ChatMessage[]> = {};
     for (const r of rows) {
       if (!result[r.conversationId]) {
@@ -3718,19 +3771,28 @@ export async function getAllChatMessages(): Promise<Record<string, ChatMessage[]
 }
 
 export async function insertChatMessage(msg: ChatMessage): Promise<ChatMessage> {
-  await db.insert(schema.chatMessages).values({
-    id: msg.id,
-    conversationId: msg.conversationId,
-    senderId: msg.senderId,
-    senderName: msg.senderName,
-    senderRole: msg.senderRole,
-    senderAvatar: msg.senderAvatar || null,
-    text: msg.text,
-    attachmentUrl: msg.attachmentUrl || null,
-    attachmentType: msg.attachmentType || null,
-    createdAt: msg.createdAt,
-    isRead: msg.isRead || false,
-  });
+  // Ensure the parent conversation exists before inserting message to prevent foreign key violation
+  try {
+    const convRows = await db.select().from(schema.chatConversations).where(eq(schema.chatConversations.id, msg.conversationId));
+    if (convRows.length === 0) {
+      await db.insert(schema.chatConversations).values({
+        id: msg.conversationId,
+        participantId: msg.senderId,
+        participantName: msg.senderName,
+        participantRole: msg.senderRole,
+        participantAvatar: msg.senderAvatar || null,
+        participantStatus: 'Online',
+        lastMessage: msg.text,
+        lastMessageTime: msg.createdAt,
+        unreadCount: 0,
+      }).onConflictDoNothing();
+    }
+  } catch (convCheckErr) {
+    console.error('Error ensuring parent conversation exists for chat message:', convCheckErr);
+  }
+
+  const validated = validateChatMessageRecord(msg);
+  await db.insert(schema.chatMessages).values(validated);
 
   // Update last message on conversation
   try {

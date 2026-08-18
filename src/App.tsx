@@ -1159,7 +1159,7 @@ export default function App() {
   };
 
   // Chat Handlers
-  const handleSendMessage = async (conversationId: string, text: string) => {
+  const handleSendMessage = async (conversationId: string, text: string, attachmentUrl?: string, attachmentType?: 'image' | 'file') => {
     const newMsg: ChatMessage = {
       id: `m-${Date.now()}`,
       conversationId,
@@ -1167,6 +1167,8 @@ export default function App() {
       senderName: currentUser.name,
       senderRole: currentUser.role,
       text,
+      attachmentUrl,
+      attachmentType,
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isRead: true,
     };
@@ -1197,6 +1199,72 @@ export default function App() {
     } catch (err) {
       console.error('Error sending chat message to SQL:', err);
     }
+  };
+
+  const handleStartConversation = async (participant: {
+    id: string;
+    name: string;
+    role: Role;
+    avatar?: string;
+  }): Promise<string> => {
+    const existing = chatConversations.find(
+      (c) =>
+        c.participantId === participant.id ||
+        (c.participantName.toLowerCase() === participant.name.toLowerCase() && c.participantRole === participant.role)
+    );
+    if (existing) {
+      return existing.id;
+    }
+
+    const newConvId = `conv-${Date.now()}`;
+    const newConv: ChatConversation = {
+      id: newConvId,
+      participantId: participant.id,
+      participantName: participant.name,
+      participantRole: participant.role,
+      participantAvatar: participant.avatar,
+      participantStatus: 'Online',
+      lastMessage: 'Conversation started',
+      lastMessageTime: 'Just now',
+      unreadCount: 0,
+    };
+
+    setChatConversations((prev) => [newConv, ...prev]);
+
+    try {
+      await fetch('/api/chat/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConv),
+      });
+      refreshAllData();
+    } catch (err) {
+      console.error('Error creating conversation in SQL:', err);
+    }
+    return newConvId;
+  };
+
+  const handleDeleteConversation = async (convId: string) => {
+    setChatConversations((prev) => prev.filter((c) => c.id !== convId));
+    setChatMessages((prev) => {
+      const copy = { ...prev };
+      delete copy[convId];
+      return copy;
+    });
+    try {
+      await fetch(`/api/chat/conversations/${convId}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error('Error deleting conversation in SQL:', e);
+    }
+  };
+
+  const handleMarkConversationRead = async (convId: string) => {
+    setChatConversations((prev) =>
+      prev.map((c) => (c.id === convId ? { ...c, unreadCount: 0 } : c))
+    );
+    try {
+      await fetch(`/api/chat/conversations/${convId}/read`, { method: 'PUT' });
+    } catch (e) {}
   };
 
   // Academic Calendar Handlers
@@ -1601,6 +1669,12 @@ export default function App() {
               messages={chatMessages}
               currentUser={currentUser}
               onSendMessage={handleSendMessage}
+              onStartConversation={handleStartConversation}
+              onDeleteConversation={handleDeleteConversation}
+              onMarkRead={handleMarkConversationRead}
+              facultyList={facultyList}
+              students={students}
+              usersList={usersList}
             />
           )}
 
