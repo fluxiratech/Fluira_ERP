@@ -6,7 +6,7 @@ import { Student360Profile, SubjectDetail, DepartmentActivity } from '../types';
 export const COLLEGE_HEADER_DETAILS = {
   institution: 'JBSPS',
   collegeName: 'CHANGU KANA THAKUR',
-  collegeType: 'ARTS, COMMERCE & SCIENCE COLLEGE, NEW PANVEL (AUTONOMOUS)',
+  collegeType: 'ARTS, COMMERCE & SCIENCE COLLEGE, NEW PANVEL (EMPOWERED AUTONOMOUS)',
   naac: 'Accredited A++ Grade by NAAC (Fourth Cycle - CGPA-3.52)',
   ugc: "'College with Potential for Excellence' Status Awarded by UGC",
   mumbaiAward: "'Best College Award' by University of Mumbai",

@@ -35,7 +35,7 @@ export const INITIAL_SETTINGS: CollegeSettings = {
   lockPastAttendanceDays: 7,
   enableWhatsAppAlerts: true,
   enableEmailAlerts: true,
-  collegeName: "JBSPS's CHANGU KANA THAKUR ARTS, COMMERCE & SCIENCE COLLEGE, NEW PANVEL (AUTONOMOUS)",
+  collegeName: "JBSPS's CHANGU KANA THAKUR ARTS, COMMERCE & SCIENCE COLLEGE, NEW PANVEL (EMPOWERED AUTONOMOUS)",
   collegeCode: 'CKT-AUT-01',
   principalName: 'Dr. S. K. Patil (Principal)',
 };
@@ -1628,7 +1628,7 @@ export const INITIAL_NOTIFICATIONS: ERPNotification[] = [
   {
     id: 'notif-1',
     title: 'Semester End Examination Schedule Published',
-    message: 'Autonomous Semester End Examination timetables have been released by the Examination Cell.',
+    message: 'Empowered Autonomous Semester End Examination timetables have been released by the Examination Cell.',
     type: 'ANNOUNCEMENT',
     createdAt: new Date().toISOString(),
     isRead: false,
@@ -1643,7 +1643,7 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
     actorRole: 'Admin',
     action: 'SYSTEM_BOOTSTRAP',
     category: 'SYSTEM',
-    details: 'Initial database synchronization completed for C.K. Thakur Autonomous College ERP.',
+    details: 'Initial database synchronization completed for C.K. Thakur Empowered Autonomous College ERP.',
     ipAddress: '127.0.0.1',
   },
 ];
@@ -1676,8 +1676,8 @@ export const INITIAL_ATKT_RECORDS: ATKTRecord[] = [
 export const INITIAL_NOTICES: NoticeItem[] = [
   {
     id: 'notice-1',
-    title: 'Autonomous Mid-Semester Internal Assessment Guidelines',
-    content: 'All departments are hereby notified that the autonomous internal continuous assessment tests will commence from the scheduled dates. Attendance minimum of 75% is strictly enforced.',
+    title: 'Empowered Autonomous Mid-Semester Internal Assessment Guidelines',
+    content: 'All departments are hereby notified that the Empowered Autonomous internal continuous assessment tests will commence from the scheduled dates. Attendance minimum of 75% is strictly enforced.',
     category: 'Academic',
     publishedBy: 'Dr. S. K. Patil (Principal)',
     publishedRole: 'Admin',
@@ -1723,7 +1723,7 @@ export const INITIAL_CHAT_CONVERSATIONS: ChatConversation[] = [
     participantRole: 'Admin',
     participantAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
     participantStatus: 'Online',
-    lastMessage: 'Autonomous examination hall tickets are available for download.',
+    lastMessage: 'Empowered Autonomous examination hall tickets are available for download.',
     lastMessageTime: 'Yesterday',
     unreadCount: 0,
   },
@@ -1792,7 +1792,7 @@ export const INITIAL_CHAT_MESSAGES: Record<string, ChatMessage[]> = {
       senderId: 'u-admin',
       senderName: 'Academic Cell & Helpdesk',
       senderRole: 'Admin',
-      text: 'Autonomous examination hall tickets are available for download.',
+      text: 'Empowered Autonomous  examination hall tickets are available for download.',
       createdAt: 'Yesterday, 04:00 PM',
       isRead: true,
     },
@@ -1876,7 +1876,7 @@ export const INITIAL_DEPARTMENT_ACTIVITIES: DepartmentActivity[] = [
 export const INITIAL_ACADEMIC_EVENTS: AcademicCalendarEvent[] = [
   {
     id: 'evt-1',
-    title: 'Commencement of Autonomous Academic Term',
+    title: 'Commencement of Empowered Autonomous Academic Term',
     eventType: 'Semester Event',
     category: 'Academic',
     startDate: '2025-07-01',

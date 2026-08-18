@@ -82,7 +82,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     smtpHost: 'smtp.office365.com',
     smtpPort: 587,
     smtpSenderEmail: 'noreply@cktcollege.edu.in',
-    smtpSenderName: "CKT College Autonomous ERP",
+    smtpSenderName: "CKT College Empowered Autonomous ERP",
     smtpEnableTls: true,
     whatsappPhoneNumberId: '102938475612345',
     whatsappWabaId: 'WABA-9823-4567',
@@ -850,7 +850,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         type="text"
                         value={form.smtpSenderName || ''}
                         onChange={(e) => setForm({ ...form, smtpSenderName: e.target.value })}
-                        placeholder="CKT Autonomous ERP"
+                        placeholder="CKT EMPOWERED AUTONOMOUS ERP"
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-medium text-slate-800"
                       />
                     </div>

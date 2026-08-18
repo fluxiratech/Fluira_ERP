@@ -286,7 +286,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, usersList,
           </div>
           <div>
             <h2 className="text-sm font-bold text-white tracking-wide uppercase">
-              JBSPS's CHANGU KANA THAKUR ARTS, COMMERCE & SCIENCE COLLEGE (AUTONOMOUS)
+              JBSPS's CHANGU KANA THAKUR ARTS, COMMERCE & SCIENCE COLLEGE (EMPOWERED AUTONOMOUS)
             </h2>
             <p className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -333,7 +333,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, usersList,
                     </svg>
                   </div>
                   <span className="absolute -bottom-1 bg-amber-500 text-slate-950 font-black text-[9px] uppercase px-2 py-0.5 rounded-full border border-amber-300 shadow">
-                    AUTONOMOUS
+                    EMPOWERED AUTONOMOUS
                   </span>
                 </div>
 
@@ -716,7 +716,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, usersList,
       {/* Official Footer */}
       <footer className="relative z-10 w-full py-4 px-6 border-t border-white/10 bg-slate-950/60 backdrop-blur-md text-center text-slate-400 text-xs font-medium space-y-1">
         <p className="tracking-wide">
-          © 2026 JBSPS – CHANGU KANA THAKUR ARTS, COMMERCE & SCIENCE COLLEGE, NEW PANVEL (AUTONOMOUS)
+          © 2026 JBSPS – CHANGU KANA THAKUR ARTS, COMMERCE & SCIENCE COLLEGE, NEW PANVEL (EMPOWERED AUTONOMOUS)
         </p>
         <p className="text-[11px] text-slate-500">
           College Attendance ERP • Department of Accounting & Finance • Production System

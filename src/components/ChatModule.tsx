@@ -423,7 +423,7 @@ export const ChatModule: React.FC<ChatModuleProps> = ({
                 </div>
                 <div className="flex items-center space-x-1.5 text-[11px] text-slate-500">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span>{activeConv.participantStatus || 'Online'} • C.K. Thakur Autonomous ERP</span>
+                  <span>{activeConv.participantStatus || 'Online'} • C.K. Thakur Empowered Autonomous ERP</span>
                 </div>
               </div>
             </div>

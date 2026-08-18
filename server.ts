@@ -2050,7 +2050,7 @@ Dear {ParentName} / {StudentName},
 
 This is an official communication from ${settings.collegeName}.
 
-Our records indicate that the attendance of {StudentName} (Roll No: {RollNumber}) currently stands at {AttendancePercentage}%, which is below the mandatory ${settings.minimumAttendancePct}% requirement specified by University & Autonomous College Regulations.
+Our records indicate that the attendance of {StudentName} (Roll No: {RollNumber}) currently stands at {AttendancePercentage}%, which is below the mandatory ${settings.minimumAttendancePct}% requirement specified by University & Empowered Autonomous College Regulations.
 
 Failure to maintain the minimum required attendance may lead to debarment from appearing in the upcoming End Semester Examinations.
 
