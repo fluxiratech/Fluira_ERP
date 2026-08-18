@@ -1220,6 +1220,25 @@ export async function initializeDatabase(seedData?: any) {
         EXCEPTION WHEN OTHERS THEN NULL;
         END;
       END $$;
+
+      -- Purge legacy fake / dummy records
+      DELETE FROM faculty_list WHERE id IN ('f-1', 'f-2', 'f-3', 'f-4', 'f-5');
+      DELETE FROM students WHERE id IN ('stu-1', 'stu-2', 'stu-3', 'stu-4', 'stu-5', 'stu-6', 'stu-7', 'stu-8', 'stu-9', 'stu-10', 'stu-11', 'stu-12', 'stu-13', 'stu-14');
+      DELETE FROM users WHERE id IN ('u-hod-af', 'u-hod-ba', 'u-f1', 'u-f2', 'u-f3', 'u-stu-1', 'u-stu-2', 'usr-stu-1', 'usr-stu-3', 'usr-stu-4', 'usr-stu-5', 'usr-stu-6', 'usr-stu-7', 'usr-stu-8', 'usr-stu-9', 'usr-stu-10', 'usr-stu-11', 'usr-stu-12', 'usr-stu-13', 'usr-stu-14');
+      DELETE FROM sessions WHERE id = 'sess-1';
+      DELETE FROM attendance_records WHERE id IN ('att-1-1', 'att-1-9');
+      DELETE FROM leaves WHERE id = 'leave-1';
+      DELETE FROM results WHERE id IN ('res-1', 'res-3');
+      DELETE FROM atkt_records WHERE id = 'atkt-1';
+      DELETE FROM notices WHERE id = 'notice-1';
+      DELETE FROM department_activities WHERE id = 'act-1';
+      DELETE FROM timetable WHERE id IN ('tt-1', 'tt-2', 'tt-3', 'tt-4');
+      DELETE FROM class_teacher_assignments WHERE id IN ('ct-1', 'ct-2');
+      DELETE FROM chat_conversations WHERE id IN ('conv-1', 'conv-2', 'conv-3', 'conv-4');
+      DELETE FROM chat_messages WHERE id IN ('msg-1-1', 'msg-1-2', 'msg-2-1', 'msg-2-2', 'msg-3-1', 'msg-4-1');
+      DELETE FROM subjects WHERE id IN ('sub-af101', 'sub-af102', 'sub-af103', 'sub-af301', 'sub-af501', 'sub-ba201', 'sub-ba202');
+      UPDATE departments SET total_students = 0, total_faculty = 0, hod_id = '', hod_name = '', avg_attendance_pct = 0.0 WHERE id IN ('dept-af', 'dept-ba');
+      UPDATE subjects SET assigned_faculty_id = NULL, assigned_faculty_name = NULL;
     `);
 
     // 1. Users
