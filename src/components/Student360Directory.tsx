@@ -81,8 +81,8 @@ export const Student360Directory: React.FC<Student360DirectoryProps> = ({
         (s) =>
           (linkedId && (s.id === linkedId || s.studentId === linkedId)) ||
           (s.email && s.email.toLowerCase() === userEmail) ||
-          (currentUser?.id && (s.studentId === currentUser.id || s.id === currentUser.id))
-      ) || studentList[0];
+          (currentUser?.id && (s.studentId === currentUser.id || s.id === currentUser.id || currentUser.id === `u-${s.id}` || currentUser.id === `usr-${s.id}`))
+      );
 
     if (!myStudent) {
       return (

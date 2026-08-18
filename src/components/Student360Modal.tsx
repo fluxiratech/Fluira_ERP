@@ -38,13 +38,13 @@ interface Student360ModalProps {
 }
 
 export const Student360Modal: React.FC<Student360ModalProps> = ({
-  student,
+  student: initialStudent,
   onClose,
   onSave,
   leaves = [],
   onApplyLeave,
 }) => {
-  if (!student) return null;
+  if (!initialStudent) return null;
 
   const [activeTab, setActiveTab] = useState<
     'profile' | 'academic' | 'gpa' | 'subjects' | 'activities' | 'portfolio' | 'attendance' | 'idcard' | 'leaves'
@@ -60,24 +60,54 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
 
   // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<Student360Profile>(student);
+  const [formData, setFormData] = useState<Student360Profile>(initialStudent);
   const [editTab, setEditTab] = useState<'personal' | 'enrollment' | 'contact' | 'parents' | 'qualifications' | 'gpas' | 'skills'>('personal');
   const [editSkillsStr, setEditSkillsStr] = useState('');
   const [editLangsStr, setEditLangsStr] = useState('');
+  const [profileData, setProfileData] = useState<Student360Profile>(initialStudent);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
-  // Synchronize state when student prop updates
+  // Synchronize state when initialStudent prop updates or fetch latest from PostgreSQL
   useEffect(() => {
-    if (student) {
-      setFormData(student);
-      setEditSkillsStr((student.technicalSkills || []).join(', '));
-      setEditLangsStr((student.programmingLanguages || []).join(', '));
+    if (initialStudent) {
+      setProfileData(initialStudent);
+      setFormData(initialStudent);
+      setEditSkillsStr((initialStudent.technicalSkills || []).join(', '));
+      setEditLangsStr((initialStudent.programmingLanguages || []).join(', '));
+
+      const fetchLatest360 = async () => {
+        const studentKey = initialStudent.id || initialStudent.studentId;
+        if (!studentKey) return;
+        setIsLoadingProfile(true);
+        try {
+          const res = await fetch(`/api/students/${encodeURIComponent(studentKey)}/360`);
+          if (res.ok) {
+            const fresh: Student360Profile = await res.json();
+            if (fresh && (fresh.id || fresh.studentId)) {
+              setProfileData(fresh);
+              setFormData(fresh);
+              setEditSkillsStr((fresh.technicalSkills || []).join(', '));
+              setEditLangsStr((fresh.programmingLanguages || []).join(', '));
+            }
+          }
+        } catch (e) {
+          console.warn('Could not sync latest 360 profile from server:', e);
+        } finally {
+          setIsLoadingProfile(false);
+        }
+      };
+
+      fetchLatest360();
     }
-  }, [student]);
+  }, [initialStudent?.id, initialStudent?.studentId]);
+
+  const activeStudent = profileData || initialStudent;
+  const student = activeStudent;
 
   const handleStartEditing = () => {
-    setFormData({ ...student });
-    setEditSkillsStr((student.technicalSkills || []).join(', '));
-    setEditLangsStr((student.programmingLanguages || []).join(', '));
+    setFormData({ ...activeStudent });
+    setEditSkillsStr((activeStudent.technicalSkills || []).join(', '));
+    setEditLangsStr((activeStudent.programmingLanguages || []).join(', '));
     setIsEditing(true);
   };
 
@@ -104,11 +134,11 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
       programmingLanguages: editLangsStr.split(/[,;]/).map(s => s.trim()).filter(Boolean),
     };
 
+    setProfileData(updatedStudent);
     if (onSave) {
       onSave(updatedStudent);
     }
     setIsEditing(false);
-    alert('Student 360° Profile updated successfully!');
   };
 
   const getAttendanceColor = (pct: number) => {
@@ -117,8 +147,8 @@ export const Student360Modal: React.FC<Student360ModalProps> = ({
     return 'text-rose-600 bg-rose-50 border-rose-200';
   };
 
-  const departmentActivities = (student.departmentActivities && student.departmentActivities.length > 0)
-    ? student.departmentActivities
+  const departmentActivities = (activeStudent.departmentActivities && activeStudent.departmentActivities.length > 0)
+    ? activeStudent.departmentActivities
     : [
         {
           id: 'act-1',

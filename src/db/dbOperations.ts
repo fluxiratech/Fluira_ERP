@@ -68,6 +68,458 @@ function safeParse<T>(val: string | null | undefined, fallback: T): T {
   }
 }
 
+// -------------------------------------------------------------
+// NUMERIC PARSING & SCHEMA VALIDATION HELPERS
+// -------------------------------------------------------------
+
+/**
+ * Safely parse a value into an integer.
+ * Handles numbers, numeric strings, floats, null/undefined, and invalid strings.
+ */
+export function parseInteger(val: any, fallback = 0, fieldName?: string, recordContext?: any): number {
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'number') {
+    if (isNaN(val) || !isFinite(val)) return fallback;
+    return Math.round(val);
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '') return fallback;
+    const num = Number(trimmed);
+    if (isNaN(num) || !isFinite(num)) {
+      console.warn(`[Schema Validation Warning] Failed to parse integer for field "${fieldName || 'unknown'}": "${val}" in record:`, recordContext || {});
+      return fallback;
+    }
+    return Math.round(num);
+  }
+  return fallback;
+}
+
+/**
+ * Safely parse a value into a float/double precision number.
+ * Handles numbers, numeric strings (e.g., '82.5'), null/undefined, and invalid strings.
+ */
+export function parseFloatNum(val: any, fallback = 0, fieldName?: string, recordContext?: any): number {
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'number') {
+    if (isNaN(val) || !isFinite(val)) return fallback;
+    return val;
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '') return fallback;
+    const num = Number(trimmed);
+    if (isNaN(num) || !isFinite(num)) {
+      console.warn(`[Schema Validation Warning] Failed to parse float for field "${fieldName || 'unknown'}": "${val}" in record:`, recordContext || {});
+      return fallback;
+    }
+    return num;
+  }
+  return fallback;
+}
+
+/**
+ * Safely parse a nullable integer for optional fields.
+ */
+export function parseNullableInteger(val: any, fieldName?: string, recordContext?: any): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  const num = typeof val === 'number' ? val : Number(String(val).trim());
+  if (isNaN(num) || !isFinite(num)) {
+    console.warn(`[Schema Validation Warning] Failed to parse nullable integer for field "${fieldName || 'unknown'}": "${val}" in record:`, recordContext || {});
+    return null;
+  }
+  return Math.round(num);
+}
+
+/**
+ * Safely parse a nullable float for optional fields.
+ */
+export function parseNullableFloat(val: any, fieldName?: string, recordContext?: any): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  const num = typeof val === 'number' ? val : Number(String(val).trim());
+  if (isNaN(num) || !isFinite(num)) {
+    console.warn(`[Schema Validation Warning] Failed to parse nullable float for field "${fieldName || 'unknown'}": "${val}" in record:`, recordContext || {});
+    return null;
+  }
+  return num;
+}
+
+/**
+ * Safely parse a boolean value.
+ */
+export function parseBooleanVal(val: any, fallback = false): boolean {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    if (lower === 'true' || lower === '1' || lower === 'yes') return true;
+    if (lower === 'false' || lower === '0' || lower === 'no') return false;
+  }
+  if (typeof val === 'number') return val !== 0;
+  return Boolean(val);
+}
+
+// -------------------------------------------------------------
+// ENTITY SCHEMA VALIDATORS BEFORE DATABASE QUERIES
+// -------------------------------------------------------------
+
+export function validateDepartmentRecord(d: any) {
+  return {
+    id: String(d.id || `dept-${Date.now()}`),
+    code: String(d.code || 'DEPT'),
+    name: String(d.name || 'Department'),
+    hodId: d.hodId ? String(d.hodId) : null,
+    hodName: d.hodName ? String(d.hodName) : null,
+    establishedYear: parseInteger(d.establishedYear, 2010, 'established_year', d),
+    totalStudents: parseInteger(d.totalStudents, 0, 'total_students', d),
+    totalFaculty: parseInteger(d.totalFaculty, 0, 'total_faculty', d),
+    avgAttendancePct: parseFloatNum(d.avgAttendancePct, 0, 'avg_attendance_pct', d),
+  };
+}
+
+export function validateProgramRecord(p: any) {
+  return {
+    id: String(p.id || `prog-${Date.now()}`),
+    code: String(p.code || 'UG'),
+    name: String(p.name || 'Undergraduate'),
+    status: String(p.status || 'Active'),
+    createdAt: p.createdAt ? String(p.createdAt) : new Date().toISOString(),
+    updatedAt: p.updatedAt ? String(p.updatedAt) : new Date().toISOString(),
+  };
+}
+
+export function validateCourseRecord(c: any) {
+  return {
+    id: String(c.id || `course-${Date.now()}`),
+    programId: String(c.programId),
+    programName: c.programName ? String(c.programName) : null,
+    courseName: String(c.courseName || c.name || 'Course'),
+    courseCode: String(c.courseCode || c.code || 'CRS'),
+    durationYears: parseInteger(c.durationYears, 3, 'duration_years', c),
+    totalSemesters: parseInteger(c.totalSemesters, 6, 'total_semesters', c),
+    status: String(c.status || 'Active'),
+    departmentId: c.departmentId ? String(c.departmentId) : null,
+    code: c.code ? String(c.code) : String(c.courseCode || 'CRS'),
+    name: c.name ? String(c.name) : String(c.courseName || 'Course'),
+    createdAt: c.createdAt ? String(c.createdAt) : new Date().toISOString(),
+    updatedAt: c.updatedAt ? String(c.updatedAt) : new Date().toISOString(),
+  };
+}
+
+export function validateSubjectRecord(s: any) {
+  return {
+    id: String(s.id || `sub-${Date.now()}`),
+    code: String(s.code || 'SUB'),
+    name: String(s.name || 'Subject'),
+    departmentId: String(s.departmentId),
+    programId: s.programId ? String(s.programId) : null,
+    programName: s.programName ? String(s.programName) : null,
+    courseId: s.courseId ? String(s.courseId) : null,
+    courseCode: s.courseCode ? String(s.courseCode) : null,
+    semester: parseInteger(s.semester, 1, 'semester', s),
+    type: String(s.type || 'Theory'),
+    credits: parseInteger(s.credits, 0, 'credits', s),
+    assignedFacultyId: s.assignedFacultyId ? String(s.assignedFacultyId) : null,
+    assignedFacultyName: s.assignedFacultyName ? String(s.assignedFacultyName) : null,
+    status: String(s.status || 'Active'),
+  };
+}
+
+export function validateStudentRecord(st: any) {
+  return mapStudentToSql(st);
+}
+
+export function validateFacultyRecord(fac: any) {
+  return mapFacultyToSql(fac);
+}
+
+export function validateTimetableRecord(t: any) {
+  return {
+    id: String(t.id || `tt-${Date.now()}`),
+    departmentId: String(t.departmentId),
+    programId: t.programId ? String(t.programId) : null,
+    programName: t.programName ? String(t.programName) : null,
+    courseId: t.courseId ? String(t.courseId) : null,
+    courseName: t.courseName ? String(t.courseName) : null,
+    semester: parseInteger(t.semester, 1, 'semester', t),
+    division: String(t.division || 'A'),
+    day: String(t.day || 'Monday'),
+    timeSlot: String(t.timeSlot || '09:00 AM - 10:00 AM'),
+    subjectId: String(t.subjectId),
+    subjectName: String(t.subjectName || 'Subject'),
+    facultyId: String(t.facultyId),
+    facultyName: String(t.facultyName || 'Faculty'),
+    classroom: String(t.classroom || 'Room 101'),
+    type: String(t.type || 'Lecture'),
+  };
+}
+
+export function validateSessionRecord(s: any) {
+  return {
+    id: String(s.id || `sess-${Date.now()}`),
+    date: String(s.date || new Date().toISOString().substring(0, 10)),
+    departmentId: String(s.departmentId),
+    programId: s.programId ? String(s.programId) : null,
+    programName: s.programName ? String(s.programName) : null,
+    courseId: s.courseId ? String(s.courseId) : null,
+    courseName: s.courseName ? String(s.courseName) : null,
+    semester: parseInteger(s.semester, 1, 'semester', s),
+    division: String(s.division || 'A'),
+    subjectId: String(s.subjectId),
+    subjectName: String(s.subjectName || 'Subject'),
+    facultyId: String(s.facultyId),
+    facultyName: String(s.facultyName || 'Faculty'),
+    sessionType: String(s.sessionType || 'Lecture'),
+    timeSlot: String(s.timeSlot || '09:00 AM - 10:00 AM'),
+    classroom: String(s.classroom || 'Room 101'),
+    isLocked: parseBooleanVal(s.isLocked, false),
+    totalStudents: parseInteger(s.totalStudents, 0, 'total_students', s),
+    presentCount: parseInteger(s.presentCount, 0, 'present_count', s),
+    absentCount: parseInteger(s.absentCount, 0, 'absent_count', s),
+    lateCount: parseInteger(s.lateCount, 0, 'late_count', s),
+    onLeaveCount: parseInteger(s.onLeaveCount, 0, 'on_leave_count', s),
+  };
+}
+
+export function validateAttendanceRecord(r: any) {
+  return {
+    id: String(r.id || `att-${Date.now()}`),
+    sessionId: String(r.sessionId),
+    studentId: String(r.studentId),
+    studentRoll: r.studentRoll ? String(r.studentRoll) : null,
+    studentName: r.studentName ? String(r.studentName) : null,
+    status: String(r.status || 'PRESENT'),
+    remarks: r.remarks ? String(r.remarks) : null,
+    markedAt: r.markedAt ? String(r.markedAt) : null,
+    markedBy: r.markedBy ? String(r.markedBy) : null,
+  };
+}
+
+export function validateLeaveRecord(l: any) {
+  return {
+    id: String(l.id || `leave-${Date.now()}`),
+    applicantId: String(l.applicantId),
+    applicantName: String(l.applicantName),
+    applicantRole: String(l.applicantRole || 'Student'),
+    applicantRollOrId: l.applicantRollOrId ? String(l.applicantRollOrId) : null,
+    departmentId: l.departmentId ? String(l.departmentId) : null,
+    leaveType: String(l.leaveType || 'Sick Leave'),
+    startDate: String(l.startDate || new Date().toISOString().substring(0, 10)),
+    endDate: String(l.endDate || new Date().toISOString().substring(0, 10)),
+    totalDays: parseInteger(l.totalDays, 1, 'total_days', l),
+    reason: l.reason ? String(l.reason) : null,
+    medicalDocUrl: l.medicalDocUrl ? String(l.medicalDocUrl) : null,
+    status: String(l.status || 'Pending'),
+    facultyRemarks: l.facultyRemarks ? String(l.facultyRemarks) : null,
+    hodRemarks: l.hodRemarks ? String(l.hodRemarks) : null,
+    createdAt: l.createdAt ? String(l.createdAt) : null,
+  };
+}
+
+export function validateResultRecord(res: any) {
+  return {
+    id: String(res.id || `res-${Date.now()}`),
+    studentId: String(res.studentId),
+    studentName: String(res.studentName),
+    rollNumber: res.rollNumber ? String(res.rollNumber) : null,
+    semester: parseInteger(res.semester, 1, 'semester', res),
+    subjectId: res.subjectId ? String(res.subjectId) : null,
+    subjectCode: res.subjectCode ? String(res.subjectCode) : null,
+    subjectName: String(res.subjectName || 'Subject'),
+    internalMarks: parseFloatNum(res.internalMarks, 0, 'internal_marks', res),
+    externalMarks: parseFloatNum(res.externalMarks, 0, 'external_marks', res),
+    totalMarks: parseFloatNum(res.totalMarks, 0, 'total_marks', res),
+    grade: res.grade ? String(res.grade) : null,
+    gpa: parseFloatNum(res.gpa, 0, 'gpa', res),
+  };
+}
+
+export function validateAtktRecord(a: any) {
+  return {
+    id: String(a.id || `atkt-${Date.now()}`),
+    studentId: String(a.studentId),
+    studentName: String(a.studentName),
+    rollNumber: a.rollNumber ? String(a.rollNumber) : null,
+    prnNumber: a.prnNumber ? String(a.prnNumber) : null,
+    course: a.course ? String(a.course) : null,
+    departmentId: a.departmentId ? String(a.departmentId) : null,
+    departmentName: a.departmentName ? String(a.departmentName) : null,
+    semester: parseInteger(a.semester, 1, 'semester', a),
+    subjectCode: a.subjectCode ? String(a.subjectCode) : null,
+    subjectName: String(a.subjectName || 'Subject'),
+    backlogType: a.backlogType ? String(a.backlogType) : null,
+    originalInternalMarks: parseNullableFloat(a.originalInternalMarks, 'original_internal_marks', a),
+    originalExternalMarks: parseNullableFloat(a.originalExternalMarks, 'original_external_marks', a),
+    attemptsCount: parseInteger(a.attemptsCount, 1, 'attempts_count', a),
+    status: String(a.status || 'Pending'),
+    examFeePaid: parseBooleanVal(a.examFeePaid, false),
+    examFeeAmount: parseFloatNum(a.examFeeAmount, 0, 'exam_fee_amount', a),
+    reExamDate: a.reExamDate ? String(a.reExamDate) : null,
+    reExamMarksObtained: parseNullableFloat(a.reExamMarksObtained, 're_exam_marks_obtained', a),
+    clearedAt: a.clearedAt ? String(a.clearedAt) : null,
+    remarks: a.remarks ? String(a.remarks) : null,
+  };
+}
+
+export function validateAcademicEventRecord(evt: any) {
+  return {
+    id: String(evt.id || `evt-${Date.now()}`),
+    title: String(evt.title || 'Event'),
+    eventType: String(evt.eventType || 'Holiday'),
+    category: String(evt.category || 'Academic'),
+    startDate: String(evt.startDate || new Date().toISOString().substring(0, 10)),
+    endDate: String(evt.endDate || evt.startDate || new Date().toISOString().substring(0, 10)),
+    isNonWorkingDay: parseBooleanVal(evt.isNonWorkingDay, true),
+    description: evt.description ? String(evt.description) : null,
+    departmentId: evt.departmentId ? String(evt.departmentId) : null,
+    departmentName: evt.departmentName ? String(evt.departmentName) : null,
+    createdBy: String(evt.createdBy || 'Admin'),
+    createdAt: evt.createdAt ? String(evt.createdAt) : new Date().toISOString().substring(0, 10),
+  };
+}
+
+export function validateAuditLogRecord(log: any) {
+  return {
+    id: String(log.id || `log-${Date.now()}`),
+    timestamp: String(log.timestamp || new Date().toISOString()),
+    actorName: log.actorName ? String(log.actorName) : null,
+    actorRole: log.actorRole ? String(log.actorRole) : null,
+    action: String(log.action || 'ACTION'),
+    category: String(log.category || 'SYSTEM'),
+    details: String(log.details || ''),
+    ipAddress: log.ipAddress ? String(log.ipAddress) : null,
+  };
+}
+
+export function validateChatConversationRecord(conv: any) {
+  return {
+    id: String(conv.id || `conv-${Date.now()}`),
+    participantId: String(conv.participantId),
+    participantName: String(conv.participantName),
+    participantRole: String(conv.participantRole),
+    participantAvatar: conv.participantAvatar ? String(conv.participantAvatar) : null,
+    participantStatus: conv.participantStatus ? String(conv.participantStatus) : 'Offline',
+    lastMessage: conv.lastMessage ? String(conv.lastMessage) : null,
+    lastMessageTime: conv.lastMessageTime ? String(conv.lastMessageTime) : null,
+    unreadCount: parseInteger(conv.unreadCount, 0, 'unread_count', conv),
+  };
+}
+
+export function validateChatMessageRecord(msg: any) {
+  return {
+    id: String(msg.id || `msg-${Date.now()}`),
+    conversationId: String(msg.conversationId),
+    senderId: String(msg.senderId),
+    senderName: String(msg.senderName),
+    senderRole: String(msg.senderRole),
+    senderAvatar: msg.senderAvatar ? String(msg.senderAvatar) : null,
+    text: String(msg.text || ''),
+    attachmentUrl: msg.attachmentUrl ? String(msg.attachmentUrl) : null,
+    attachmentType: msg.attachmentType ? String(msg.attachmentType) : null,
+    createdAt: String(msg.createdAt || new Date().toISOString()),
+    isRead: parseBooleanVal(msg.isRead, false),
+  };
+}
+
+export function validateImportLogRecord(imp: any) {
+  return {
+    id: String(imp.id || `imp-${Date.now()}`),
+    fileName: String(imp.fileName || 'import.csv'),
+    uploadedAt: String(imp.uploadedAt || new Date().toISOString()),
+    uploadedBy: String(imp.uploadedBy || 'Admin'),
+    totalRecords: parseInteger(imp.totalRecords, 0, 'total_records', imp),
+    importedCount: parseInteger(imp.importedCount, 0, 'imported_count', imp),
+    updatedCount: parseInteger(imp.updatedCount, 0, 'updated_count', imp),
+    skippedCount: parseInteger(imp.skippedCount, 0, 'skipped_count', imp),
+    status: String(imp.status || 'Completed'),
+  };
+}
+
+export function validatePromotionHistoryRecord(promo: any) {
+  return {
+    id: String(promo.id || `promo-${Date.now()}`),
+    batchName: String(promo.batchName || 'Batch Promotion'),
+    promotedAt: String(promo.promotedAt || new Date().toISOString()),
+    promotedBy: String(promo.promotedBy || 'Admin'),
+    program: String(promo.program || 'UG'),
+    course: String(promo.course || 'Course'),
+    fromSemester: parseInteger(promo.fromSemester, 1, 'from_semester', promo),
+    toSemester: parseInteger(promo.toSemester, 2, 'to_semester', promo),
+    totalStudentsPromoted: parseInteger(promo.totalStudentsPromoted, 0, 'total_students_promoted', promo),
+    status: String(promo.status || 'Completed'),
+    records: promo.records ? (typeof promo.records === 'string' ? promo.records : JSON.stringify(promo.records)) : null,
+  };
+}
+
+export function validateClassTeacherRecord(ct: any) {
+  return {
+    id: String(ct.id || `ct-${Date.now()}`),
+    departmentId: String(ct.departmentId),
+    departmentName: String(ct.departmentName),
+    courseId: String(ct.courseId),
+    courseCode: String(ct.courseCode),
+    courseName: String(ct.courseName),
+    academicYear: String(ct.academicYear || '2025-2026'),
+    semester: parseInteger(ct.semester, 1, 'semester', ct),
+    division: String(ct.division || 'A'),
+    classTeacherId: String(ct.classTeacherId),
+    classTeacherName: String(ct.classTeacherName),
+    assistantTeacherId: ct.assistantTeacherId ? String(ct.assistantTeacherId) : null,
+    assistantTeacherName: ct.assistantTeacherName ? String(ct.assistantTeacherName) : null,
+    classroom: String(ct.classroom || 'Room 101'),
+    academicSession: String(ct.academicSession || '2025-2026'),
+    assignedAt: String(ct.assignedAt || new Date().toISOString().substring(0, 10)),
+    assignedBy: String(ct.assignedBy || 'Admin'),
+  };
+}
+
+export function validateNoticeRecord(n: any) {
+  return {
+    id: String(n.id || `notice-${Date.now()}`),
+    title: String(n.title || 'Notice'),
+    content: String(n.content || ''),
+    category: String(n.category || 'General'),
+    publishedBy: n.publishedBy ? String(n.publishedBy) : null,
+    publishedRole: n.publishedRole ? String(n.publishedRole) : null,
+    createdAt: n.createdAt ? String(n.createdAt) : new Date().toISOString(),
+    scheduledAt: n.scheduledAt ? String(n.scheduledAt) : null,
+    isPinned: parseBooleanVal(n.isPinned, false),
+    isArchived: parseBooleanVal(n.isArchived, false),
+    targetProgram: n.targetProgram ? String(n.targetProgram) : null,
+    targetCourse: n.targetCourse ? String(n.targetCourse) : null,
+    targetAcademicYear: n.targetAcademicYear ? String(n.targetAcademicYear) : null,
+    targetSemester: parseNullableInteger(n.targetSemester, 'target_semester', n),
+    targetDivision: n.targetDivision ? String(n.targetDivision) : null,
+    attachmentUrl: n.attachmentUrl ? String(n.attachmentUrl) : null,
+    attachmentName: n.attachmentName ? String(n.attachmentName) : null,
+    sentChannels: n.sentChannels ? (typeof n.sentChannels === 'string' ? n.sentChannels : JSON.stringify(n.sentChannels)) : null,
+  };
+}
+
+export function validateDepartmentActivityRecord(da: any) {
+  return {
+    id: String(da.id || `act-${Date.now()}`),
+    type: String(da.type || 'Workshop'),
+    title: String(da.title || 'Activity'),
+    date: String(da.date || new Date().toISOString().substring(0, 10)),
+    organizer: da.organizer ? String(da.organizer) : null,
+    roleOrPosition: da.roleOrPosition ? String(da.roleOrPosition) : null,
+    description: da.description ? String(da.description) : null,
+    photoUrl: da.photoUrl ? String(da.photoUrl) : null,
+    certificateUrl: da.certificateUrl ? String(da.certificateUrl) : null,
+    departmentId: da.departmentId ? String(da.departmentId) : null,
+    departmentName: da.departmentName ? String(da.departmentName) : null,
+    venue: da.venue ? String(da.venue) : null,
+    speakerOrGuest: da.speakerOrGuest ? String(da.speakerOrGuest) : null,
+    targetAudience: da.targetAudience ? String(da.targetAudience) : null,
+    participantsCount: parseInteger(da.participantsCount, 0, 'participants_count', da),
+    academicYear: da.academicYear ? String(da.academicYear) : null,
+    status: da.status ? String(da.status) : 'Completed',
+    keyOutcomes: da.keyOutcomes ? String(da.keyOutcomes) : null,
+    studentParticipants: da.studentParticipants ? (typeof da.studentParticipants === 'string' ? da.studentParticipants : JSON.stringify(da.studentParticipants)) : null,
+  };
+}
+
 // Transform PostgreSQL student row to Student360Profile
 export function mapSqlToStudent(row: any): Student360Profile {
   return {
@@ -89,7 +541,7 @@ export function mapSqlToStudent(row: any): Student360Profile {
     academicYearCode: row.academicYearCode || undefined,
     departmentId: row.departmentId || '',
     departmentName: row.departmentName || '',
-    semester: Number(row.semester) || 1,
+    semester: parseInteger(row.semester, 1, 'semester', row),
     division: row.division || 'A',
     academicYear: row.academicYear || '',
     personalMobile: row.personalMobile || '',
@@ -107,20 +559,20 @@ export function mapSqlToStudent(row: any): Student360Profile {
     sscSchoolName: row.sscSchoolName || '',
     sscBoard: row.sscBoard || '',
     sscPassingYear: row.sscPassingYear || '',
-    sscPercentage: Number(row.sscPercentage) || 0,
+    sscPercentage: parseFloatNum(row.sscPercentage, 0, 'ssc_percentage', row),
     hscCollegeName: row.hscCollegeName || '',
     hscBoard: row.hscBoard || '',
     hscStream: row.hscStream || '',
     hscPassingYear: row.hscPassingYear || '',
-    hscPercentage: Number(row.hscPercentage) || 0,
+    hscPercentage: parseFloatNum(row.hscPercentage, 0, 'hsc_percentage', row),
     academicPerformance: safeParse(row.academicPerformance, []),
-    sem1Gpa: Number(row.sem1Gpa) || 0,
-    sem2Gpa: Number(row.sem2Gpa) || 0,
-    sem3Gpa: Number(row.sem3Gpa) || 0,
-    sem4Gpa: Number(row.sem4Gpa) || 0,
-    sem5Gpa: row.sem5Gpa !== null ? Number(row.sem5Gpa) : undefined,
-    sem6Gpa: row.sem6Gpa !== null ? Number(row.sem6Gpa) : undefined,
-    overallCgpa: Number(row.overallCgpa) || 0,
+    sem1Gpa: parseFloatNum(row.sem1Gpa, 0, 'sem1_gpa', row),
+    sem2Gpa: parseFloatNum(row.sem2Gpa, 0, 'sem2_gpa', row),
+    sem3Gpa: parseFloatNum(row.sem3Gpa, 0, 'sem3_gpa', row),
+    sem4Gpa: parseFloatNum(row.sem4Gpa, 0, 'sem4_gpa', row),
+    sem5Gpa: parseNullableFloat(row.sem5Gpa, 'sem5_gpa', row) ?? undefined,
+    sem6Gpa: parseNullableFloat(row.sem6Gpa, 'sem6_gpa', row) ?? undefined,
+    overallCgpa: parseFloatNum(row.overallCgpa, 0, 'overall_cgpa', row),
     technicalSkills: safeParse(row.technicalSkills, []),
     programmingLanguages: safeParse(row.programmingLanguages, []),
     certifications: safeParse(row.certifications, []),
@@ -138,9 +590,9 @@ export function mapSqlToStudent(row: any): Student360Profile {
     academicStatus: (row.academicStatus as any) || 'Active',
     batch: row.batch || undefined,
     annualIncome: row.annualIncome || undefined,
-    totalLectures: Number(row.totalLectures) || 0,
-    attendedLectures: Number(row.attendedLectures) || 0,
-    attendancePercentage: Number(row.attendancePercentage) || 0,
+    totalLectures: parseInteger(row.totalLectures, 0, 'total_lectures', row),
+    attendedLectures: parseInteger(row.attendedLectures, 0, 'attended_lectures', row),
+    attendancePercentage: parseFloatNum(row.attendancePercentage, 0, 'attendance_percentage', row),
   };
 }
 
@@ -165,7 +617,7 @@ export function mapStudentToSql(st: Student360Profile): any {
     academicYearCode: st.academicYearCode || null,
     departmentId: st.departmentId ? st.departmentId : null,
     departmentName: st.departmentName || '',
-    semester: Number(st.semester) || 1,
+    semester: parseInteger(st.semester, 1, 'semester', st),
     division: st.division || 'A',
     academicYear: st.academicYear || '',
     personalMobile: st.personalMobile || '',
@@ -183,20 +635,20 @@ export function mapStudentToSql(st: Student360Profile): any {
     sscSchoolName: st.sscSchoolName || '',
     sscBoard: st.sscBoard || '',
     sscPassingYear: st.sscPassingYear || '',
-    sscPercentage: isNaN(Number(st.sscPercentage)) ? 0 : Number(st.sscPercentage),
+    sscPercentage: parseFloatNum(st.sscPercentage, 0, 'ssc_percentage', st),
     hscCollegeName: st.hscCollegeName || '',
     hscBoard: st.hscBoard || '',
     hscStream: st.hscStream || '',
     hscPassingYear: st.hscPassingYear || '',
-    hscPercentage: isNaN(Number(st.hscPercentage)) ? 0 : Number(st.hscPercentage),
+    hscPercentage: parseFloatNum(st.hscPercentage, 0, 'hsc_percentage', st),
     academicPerformance: JSON.stringify(st.academicPerformance || []),
-    sem1Gpa: isNaN(Number(st.sem1Gpa)) ? 0 : Number(st.sem1Gpa),
-    sem2Gpa: isNaN(Number(st.sem2Gpa)) ? 0 : Number(st.sem2Gpa),
-    sem3Gpa: isNaN(Number(st.sem3Gpa)) ? 0 : Number(st.sem3Gpa),
-    sem4Gpa: isNaN(Number(st.sem4Gpa)) ? 0 : Number(st.sem4Gpa),
-    sem5Gpa: st.sem5Gpa !== undefined && st.sem5Gpa !== null && !isNaN(Number(st.sem5Gpa)) ? Number(st.sem5Gpa) : null,
-    sem6Gpa: st.sem6Gpa !== undefined && st.sem6Gpa !== null && !isNaN(Number(st.sem6Gpa)) ? Number(st.sem6Gpa) : null,
-    overallCgpa: isNaN(Number(st.overallCgpa)) ? 0 : Number(st.overallCgpa),
+    sem1Gpa: parseFloatNum(st.sem1Gpa, 0, 'sem1_gpa', st),
+    sem2Gpa: parseFloatNum(st.sem2Gpa, 0, 'sem2_gpa', st),
+    sem3Gpa: parseFloatNum(st.sem3Gpa, 0, 'sem3_gpa', st),
+    sem4Gpa: parseFloatNum(st.sem4Gpa, 0, 'sem4_gpa', st),
+    sem5Gpa: parseNullableFloat(st.sem5Gpa, 'sem5_gpa', st),
+    sem6Gpa: parseNullableFloat(st.sem6Gpa, 'sem6_gpa', st),
+    overallCgpa: parseFloatNum(st.overallCgpa, 0, 'overall_cgpa', st),
     technicalSkills: JSON.stringify(st.technicalSkills || []),
     programmingLanguages: JSON.stringify(st.programmingLanguages || []),
     certifications: JSON.stringify(st.certifications || []),
@@ -214,9 +666,9 @@ export function mapStudentToSql(st: Student360Profile): any {
     academicStatus: st.academicStatus || 'Active',
     batch: st.batch || null,
     annualIncome: st.annualIncome || null,
-    totalLectures: isNaN(Number(st.totalLectures)) ? 0 : Math.round(Number(st.totalLectures)),
-    attendedLectures: isNaN(Number(st.attendedLectures)) ? 0 : Math.round(Number(st.attendedLectures)),
-    attendancePercentage: isNaN(Number(st.attendancePercentage)) ? 0 : Number(st.attendancePercentage),
+    totalLectures: parseInteger(st.totalLectures, 0, 'total_lectures', st),
+    attendedLectures: parseInteger(st.attendedLectures, 0, 'attended_lectures', st),
+    attendancePercentage: parseFloatNum(st.attendancePercentage, 0, 'attendance_percentage', st),
   };
 }
 
@@ -232,12 +684,12 @@ export function mapSqlToFaculty(row: any): Faculty {
     departmentName: row.departmentName || '',
     designation: (row.designation as any) || 'Assistant Professor',
     qualification: row.qualification || '',
-    experienceYears: Number(row.experienceYears) || 0,
+    experienceYears: parseInteger(row.experienceYears, 0, 'experience_years', row),
     photo: row.photo || '',
     allocatedSubjects: safeParse(row.allocatedSubjects, []),
     isClassTeacherOf: safeParse(row.isClassTeacherOf, undefined),
-    weeklyWorkloadHours: Number(row.weeklyWorkloadHours) || 0,
-    isActive: Boolean(row.isActive),
+    weeklyWorkloadHours: parseFloatNum(row.weeklyWorkloadHours, 0, 'weekly_workload_hours', row),
+    isActive: parseBooleanVal(row.isActive, true),
   };
 }
 
@@ -252,12 +704,12 @@ export function mapFacultyToSql(fac: Faculty): any {
     departmentName: fac.departmentName || '',
     designation: fac.designation || 'Assistant Professor',
     qualification: fac.qualification || '',
-    experienceYears: fac.experienceYears || 0,
+    experienceYears: parseInteger(fac.experienceYears, 0, 'experience_years', fac),
     photo: fac.photo || '',
     allocatedSubjects: JSON.stringify(fac.allocatedSubjects || []),
     isClassTeacherOf: fac.isClassTeacherOf ? JSON.stringify(fac.isClassTeacherOf) : null,
-    weeklyWorkloadHours: fac.weeklyWorkloadHours || 0,
-    isActive: fac.isActive !== undefined ? fac.isActive : true,
+    weeklyWorkloadHours: parseFloatNum(fac.weeklyWorkloadHours, 0, 'weekly_workload_hours', fac),
+    isActive: fac.isActive !== undefined ? parseBooleanVal(fac.isActive, true) : true,
   };
 }
 
@@ -774,116 +1226,201 @@ export async function initializeDatabase(seedData?: any) {
     try {
       const usersToInsert = (Array.isArray(seedData?.users) && seedData.users.length > 0) ? seedData.users : INITIAL_USERS;
       for (const u of usersToInsert) {
-        await insertUser(u);
+        try {
+          await insertUser(u);
+        } catch (uErr: any) {
+          console.error(`[initializeDatabase users seed error] Failed for user ID "${u?.id}" (${u?.email}):`, {
+            errorMessage: uErr?.message,
+            errorCode: uErr?.code,
+            errorDetail: uErr?.detail,
+            failedRecordId: u?.id,
+            tableName: 'users',
+            parameters: { id: u?.id, email: u?.email, name: u?.name, role: u?.role, departmentId: u?.departmentId },
+            rawRecord: u,
+          });
+        }
       }
     } catch (uErr) {
-      console.error('[initializeDatabase users seed]:', uErr);
+      console.error('[initializeDatabase users seed top-level]:', uErr);
     }
 
     // 2. Programs
     try {
       const progsToInsert = (Array.isArray(seedData?.programs) && seedData.programs.length > 0) ? seedData.programs : INITIAL_PROGRAMS;
       for (const p of progsToInsert) {
-        await db.insert(schema.programs).values({
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          status: p.status || 'Active',
-          createdAt: p.createdAt || new Date().toISOString(),
-          updatedAt: p.updatedAt || new Date().toISOString(),
-        }).onConflictDoNothing();
+        try {
+          const validated = validateProgramRecord(p);
+          await db.insert(schema.programs).values(validated).onConflictDoNothing();
+        } catch (pErr: any) {
+          console.error(`[initializeDatabase programs seed error] Failed for program ID "${p?.id}" (${p?.code}):`, {
+            errorMessage: pErr?.message,
+            errorCode: pErr?.code,
+            errorDetail: pErr?.detail,
+            failedRecordId: p?.id,
+            tableName: 'programs',
+            parameters: { id: p?.id, code: p?.code, name: p?.name, status: p?.status },
+            rawRecord: p,
+          });
+        }
       }
     } catch (pErr) {
-      console.error('[initializeDatabase programs seed]:', pErr);
+      console.error('[initializeDatabase programs seed top-level]:', pErr);
     }
 
     // 3. Departments
     try {
       const deptsToInsert = (Array.isArray(seedData?.departments) && seedData.departments.length > 0) ? seedData.departments : INITIAL_DEPARTMENTS;
       for (const d of deptsToInsert) {
-        await db.insert(schema.departments).values({
-          id: d.id,
-          code: d.code,
-          name: d.name,
-          hodId: d.hodId || null,
-          hodName: d.hodName || null,
-          establishedYear: Number(d.establishedYear) || 2010,
-          totalStudents: Number(d.totalStudents) || 0,
-          totalFaculty: Number(d.totalFaculty) || 0,
-          avgAttendancePct: Number(d.avgAttendancePct) || 0,
-        }).onConflictDoNothing();
+        try {
+          const validated = validateDepartmentRecord(d);
+          await db.insert(schema.departments).values(validated).onConflictDoNothing();
+        } catch (dErr: any) {
+          console.error(`[initializeDatabase departments seed error] Failed for department ID "${d?.id}" (${d?.code} - ${d?.name}):`, {
+            errorMessage: dErr?.message,
+            errorCode: dErr?.code,
+            errorDetail: dErr?.detail,
+            failedRecordId: d?.id,
+            tableName: 'departments',
+            parameters: {
+              id: d?.id,
+              code: d?.code,
+              name: d?.name,
+              establishedYear: d?.establishedYear,
+              totalStudents: d?.totalStudents,
+              totalFaculty: d?.totalFaculty,
+              avgAttendancePct: d?.avgAttendancePct,
+            },
+            rawRecord: d,
+          });
+        }
       }
     } catch (dErr) {
-      console.error('[initializeDatabase departments seed]:', dErr);
+      console.error('[initializeDatabase departments seed top-level]:', dErr);
     }
 
     // 4. Courses
     try {
       const coursesToInsert = (Array.isArray(seedData?.courses) && seedData.courses.length > 0) ? seedData.courses : INITIAL_COURSES;
       for (const c of coursesToInsert) {
-        await db.insert(schema.courses).values({
-          id: c.id,
-          programId: c.programId,
-          programName: c.programName || null,
-          courseName: c.courseName,
-          courseCode: c.courseCode,
-          durationYears: Number(c.durationYears) || 3,
-          totalSemesters: Number(c.totalSemesters) || 6,
-          status: c.status || 'Active',
-          departmentId: c.departmentId || null,
-          code: c.code || c.courseCode,
-          name: c.name || c.courseName,
-          createdAt: c.createdAt || new Date().toISOString(),
-          updatedAt: c.updatedAt || new Date().toISOString(),
-        }).onConflictDoNothing();
+        try {
+          const validated = validateCourseRecord(c);
+          await db.insert(schema.courses).values(validated).onConflictDoNothing();
+        } catch (cErr: any) {
+          console.error(`[initializeDatabase courses seed error] Failed for course ID "${c?.id}" (${c?.courseCode || c?.code}):`, {
+            errorMessage: cErr?.message,
+            errorCode: cErr?.code,
+            errorDetail: cErr?.detail,
+            failedRecordId: c?.id,
+            tableName: 'courses',
+            parameters: {
+              id: c?.id,
+              programId: c?.programId,
+              courseName: c?.courseName,
+              courseCode: c?.courseCode,
+              durationYears: c?.durationYears,
+              totalSemesters: c?.totalSemesters,
+            },
+            rawRecord: c,
+          });
+        }
       }
     } catch (cErr) {
-      console.error('[initializeDatabase courses seed]:', cErr);
+      console.error('[initializeDatabase courses seed top-level]:', cErr);
     }
 
     // 5. Subjects
     try {
       const subjectsToInsert = (Array.isArray(seedData?.subjects) && seedData.subjects.length > 0) ? seedData.subjects : INITIAL_SUBJECTS;
       for (const s of subjectsToInsert) {
-        await db.insert(schema.subjects).values({
-          id: s.id,
-          code: s.code,
-          name: s.name,
-          departmentId: s.departmentId,
-          programId: s.programId || null,
-          programName: s.programName || null,
-          courseId: s.courseId || null,
-          courseCode: s.courseCode || null,
-          semester: Number(s.semester) || 1,
-          type: s.type,
-          credits: Number(s.credits) || 0,
-          assignedFacultyId: s.assignedFacultyId || null,
-          assignedFacultyName: s.assignedFacultyName || null,
-          status: s.status || 'Active',
-        }).onConflictDoNothing();
+        try {
+          const validated = validateSubjectRecord(s);
+          await db.insert(schema.subjects).values(validated).onConflictDoNothing();
+        } catch (sErr: any) {
+          console.error(`[initializeDatabase subjects seed error] Failed for subject ID "${s?.id}" (${s?.code} - ${s?.name}):`, {
+            errorMessage: sErr?.message,
+            errorCode: sErr?.code,
+            errorDetail: sErr?.detail,
+            failedRecordId: s?.id,
+            tableName: 'subjects',
+            parameters: {
+              id: s?.id,
+              code: s?.code,
+              name: s?.name,
+              semester: s?.semester,
+              credits: s?.credits,
+              type: s?.type,
+              departmentId: s?.departmentId,
+            },
+            rawRecord: s,
+          });
+        }
       }
     } catch (sErr) {
-      console.error('[initializeDatabase subjects seed]:', sErr);
+      console.error('[initializeDatabase subjects seed top-level]:', sErr);
     }
 
     // 6. Students
     try {
       const studentsToInsert = (Array.isArray(seedData?.students) && seedData.students.length > 0) ? seedData.students : INITIAL_STUDENTS;
       for (const st of studentsToInsert) {
-        await upsertStudent(st);
+        try {
+          await upsertStudent(st);
+        } catch (stErr: any) {
+          console.error(`[initializeDatabase students seed error] Failed for student ID "${st?.id}" (${st?.studentId} - ${st?.fullName}):`, {
+            errorMessage: stErr?.message,
+            errorCode: stErr?.code,
+            errorDetail: stErr?.detail,
+            failedRecordId: st?.id,
+            tableName: 'students',
+            parameters: {
+              id: st?.id,
+              studentId: st?.studentId,
+              rollNumber: st?.rollNumber,
+              fullName: st?.fullName,
+              semester: st?.semester,
+              attendancePercentage: st?.attendancePercentage,
+              sscPercentage: st?.sscPercentage,
+              hscPercentage: st?.hscPercentage,
+              sem1Gpa: st?.sem1Gpa,
+              sem2Gpa: st?.sem2Gpa,
+              overallCgpa: st?.overallCgpa,
+            },
+            rawRecord: st,
+          });
+        }
       }
     } catch (stErr) {
-      console.error('[initializeDatabase students seed]:', stErr);
+      console.error('[initializeDatabase students seed top-level]:', stErr);
     }
 
     // 7. Faculty
     try {
       const facToInsert = (Array.isArray(seedData?.facultyList) && seedData.facultyList.length > 0) ? seedData.facultyList : INITIAL_FACULTY;
       for (const f of facToInsert) {
-        await db.insert(schema.facultyList).values(mapFacultyToSql(f)).onConflictDoNothing();
+        try {
+          const validated = validateFacultyRecord(f);
+          await db.insert(schema.facultyList).values(validated).onConflictDoNothing();
+        } catch (fErr: any) {
+          console.error(`[initializeDatabase faculty seed error] Failed for faculty ID "${f?.id}" (${f?.facultyId} - ${f?.fullName}):`, {
+            errorMessage: fErr?.message,
+            errorCode: fErr?.code,
+            errorDetail: fErr?.detail,
+            failedRecordId: f?.id,
+            tableName: 'faculty_list',
+            parameters: {
+              id: f?.id,
+              facultyId: f?.facultyId,
+              fullName: f?.fullName,
+              email: f?.email,
+              experienceYears: f?.experienceYears,
+              weeklyWorkloadHours: f?.weeklyWorkloadHours,
+            },
+            rawRecord: f,
+          });
+        }
       }
     } catch (fErr) {
-      console.error('[initializeDatabase faculty seed]:', fErr);
+      console.error('[initializeDatabase faculty seed top-level]:', fErr);
     }
 
     // 8. Timetable
@@ -892,28 +1429,32 @@ export async function initializeDatabase(seedData?: any) {
       if (existingTimetable.length === 0) {
         const ttToInsert = (Array.isArray(seedData?.timetable) && seedData.timetable.length > 0) ? seedData.timetable : INITIAL_TIMETABLE;
         for (const t of ttToInsert) {
-          await db.insert(schema.timetable).values({
-            id: t.id,
-            departmentId: t.departmentId,
-            programId: t.programId || null,
-            programName: t.programName || null,
-            courseId: t.courseId || null,
-            courseName: t.courseName || null,
-            semester: Number(t.semester) || 1,
-            division: t.division,
-            day: t.day,
-            timeSlot: t.timeSlot,
-            subjectId: t.subjectId,
-            subjectName: t.subjectName,
-            facultyId: t.facultyId,
-            facultyName: t.facultyName,
-            classroom: t.classroom,
-            type: t.type,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateTimetableRecord(t);
+            await db.insert(schema.timetable).values(validated).onConflictDoNothing();
+          } catch (ttErr: any) {
+            console.error(`[initializeDatabase timetable seed error] Failed for timetable ID "${t?.id}" (${t?.subjectName} on ${t?.day} ${t?.timeSlot}):`, {
+              errorMessage: ttErr?.message,
+              errorCode: ttErr?.code,
+              errorDetail: ttErr?.detail,
+              failedRecordId: t?.id,
+              tableName: 'timetable',
+              parameters: {
+                id: t?.id,
+                semester: t?.semester,
+                division: t?.division,
+                day: t?.day,
+                timeSlot: t?.timeSlot,
+                subjectId: t?.subjectId,
+                facultyId: t?.facultyId,
+              },
+              rawRecord: t,
+            });
+          }
         }
       }
     } catch (ttErr) {
-      console.error('[initializeDatabase timetable seed]:', ttErr);
+      console.error('[initializeDatabase timetable seed top-level]:', ttErr);
     }
 
     // 9. Sessions & Attendance Records
@@ -922,34 +1463,32 @@ export async function initializeDatabase(seedData?: any) {
       if (existingSessions.length === 0) {
         const sessToInsert = (Array.isArray(seedData?.sessions) && seedData.sessions.length > 0) ? seedData.sessions : INITIAL_SESSIONS;
         for (const s of sessToInsert) {
-          await db.insert(schema.sessions).values({
-            id: s.id,
-            date: s.date,
-            departmentId: s.departmentId,
-            programId: s.programId || null,
-            programName: s.programName || null,
-            courseId: s.courseId || null,
-            courseName: s.courseName || null,
-            semester: Number(s.semester) || 1,
-            division: s.division,
-            subjectId: s.subjectId,
-            subjectName: s.subjectName,
-            facultyId: s.facultyId,
-            facultyName: s.facultyName,
-            sessionType: s.sessionType,
-            timeSlot: s.timeSlot,
-            classroom: s.classroom,
-            isLocked: s.isLocked || false,
-            totalStudents: Number(s.totalStudents) || 0,
-            presentCount: Number(s.presentCount) || 0,
-            absentCount: Number(s.absentCount) || 0,
-            lateCount: Number(s.lateCount) || 0,
-            onLeaveCount: Number(s.onLeaveCount) || 0,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateSessionRecord(s);
+            await db.insert(schema.sessions).values(validated).onConflictDoNothing();
+          } catch (sessErr: any) {
+            console.error(`[initializeDatabase sessions seed error] Failed for session ID "${s?.id}" (${s?.subjectName} - ${s?.date}):`, {
+              errorMessage: sessErr?.message,
+              errorCode: sessErr?.code,
+              errorDetail: sessErr?.detail,
+              failedRecordId: s?.id,
+              tableName: 'sessions',
+              parameters: {
+                id: s?.id,
+                semester: s?.semester,
+                totalStudents: s?.totalStudents,
+                presentCount: s?.presentCount,
+                absentCount: s?.absentCount,
+                lateCount: s?.lateCount,
+                onLeaveCount: s?.onLeaveCount,
+              },
+              rawRecord: s,
+            });
+          }
         }
       }
     } catch (sessErr) {
-      console.error('[initializeDatabase sessions seed]:', sessErr);
+      console.error('[initializeDatabase sessions seed top-level]:', sessErr);
     }
 
     try {
@@ -957,21 +1496,24 @@ export async function initializeDatabase(seedData?: any) {
       if (existingAttRecs.length === 0) {
         const recsToInsert = (Array.isArray(seedData?.attendanceRecords) && seedData.attendanceRecords.length > 0) ? seedData.attendanceRecords : INITIAL_ATTENDANCE_RECORDS;
         for (const r of recsToInsert) {
-          await db.insert(schema.attendanceRecords).values({
-            id: r.id,
-            sessionId: r.sessionId,
-            studentId: r.studentId,
-            studentRoll: r.studentRoll || null,
-            studentName: r.studentName || null,
-            status: r.status,
-            remarks: r.remarks || null,
-            markedAt: r.markedAt || null,
-            markedBy: r.markedBy || null,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateAttendanceRecord(r);
+            await db.insert(schema.attendanceRecords).values(validated).onConflictDoNothing();
+          } catch (attErr: any) {
+            console.error(`[initializeDatabase attendanceRecords seed error] Failed for record ID "${r?.id}" (student: ${r?.studentName}):`, {
+              errorMessage: attErr?.message,
+              errorCode: attErr?.code,
+              errorDetail: attErr?.detail,
+              failedRecordId: r?.id,
+              tableName: 'attendance_records',
+              parameters: { id: r?.id, sessionId: r?.sessionId, studentId: r?.studentId, status: r?.status },
+              rawRecord: r,
+            });
+          }
         }
       }
     } catch (attErr) {
-      console.error('[initializeDatabase attendanceRecords seed]:', attErr);
+      console.error('[initializeDatabase attendanceRecords seed top-level]:', attErr);
     }
 
     // 10. Leaves & Corrections
@@ -980,28 +1522,30 @@ export async function initializeDatabase(seedData?: any) {
       if (existingLeaves.length === 0) {
         const leavesToInsert = (Array.isArray(seedData?.leaves) && seedData.leaves.length > 0) ? seedData.leaves : INITIAL_LEAVES;
         for (const l of leavesToInsert) {
-          await db.insert(schema.leaves).values({
-            id: l.id,
-            applicantId: l.applicantId,
-            applicantName: l.applicantName,
-            applicantRole: l.applicantRole,
-            applicantRollOrId: l.applicantRollOrId || null,
-            departmentId: l.departmentId || null,
-            leaveType: l.leaveType,
-            startDate: l.startDate,
-            endDate: l.endDate,
-            totalDays: Number(l.totalDays) || 1,
-            reason: l.reason || null,
-            medicalDocUrl: l.medicalDocUrl || null,
-            status: l.status,
-            facultyRemarks: l.facultyRemarks || null,
-            hodRemarks: l.hodRemarks || null,
-            createdAt: l.createdAt || null,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateLeaveRecord(l);
+            await db.insert(schema.leaves).values(validated).onConflictDoNothing();
+          } catch (lErr: any) {
+            console.error(`[initializeDatabase leaves seed error] Failed for leave ID "${l?.id}" (${l?.applicantName}):`, {
+              errorMessage: lErr?.message,
+              errorCode: lErr?.code,
+              errorDetail: lErr?.detail,
+              failedRecordId: l?.id,
+              tableName: 'leaves',
+              parameters: {
+                id: l?.id,
+                totalDays: l?.totalDays,
+                leaveType: l?.leaveType,
+                startDate: l?.startDate,
+                endDate: l?.endDate,
+              },
+              rawRecord: l,
+            });
+          }
         }
       }
     } catch (lErr) {
-      console.error('[initializeDatabase leaves seed]:', lErr);
+      console.error('[initializeDatabase leaves seed top-level]:', lErr);
     }
 
     // 11. Results
@@ -1010,25 +1554,31 @@ export async function initializeDatabase(seedData?: any) {
       if (existingResults.length === 0) {
         const resultsToInsert = (Array.isArray(seedData?.results) && seedData.results.length > 0) ? seedData.results : INITIAL_RESULTS;
         for (const res of resultsToInsert) {
-          await db.insert(schema.results).values({
-            id: res.id,
-            studentId: res.studentId,
-            studentName: res.studentName,
-            rollNumber: res.rollNumber || null,
-            semester: Number(res.semester) || 1,
-            subjectId: res.subjectId || null,
-            subjectCode: res.subjectCode || null,
-            subjectName: res.subjectName,
-            internalMarks: Number(res.internalMarks) || 0,
-            externalMarks: Number(res.externalMarks) || 0,
-            totalMarks: Number(res.totalMarks) || 0,
-            grade: res.grade || null,
-            gpa: Number(res.gpa) || 0,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateResultRecord(res);
+            await db.insert(schema.results).values(validated).onConflictDoNothing();
+          } catch (rErr: any) {
+            console.error(`[initializeDatabase results seed error] Failed for result ID "${res?.id}" (${res?.studentName} - ${res?.subjectName}):`, {
+              errorMessage: rErr?.message,
+              errorCode: rErr?.code,
+              errorDetail: rErr?.detail,
+              failedRecordId: res?.id,
+              tableName: 'results',
+              parameters: {
+                id: res?.id,
+                semester: res?.semester,
+                internalMarks: res?.internalMarks,
+                externalMarks: res?.externalMarks,
+                totalMarks: res?.totalMarks,
+                gpa: res?.gpa,
+              },
+              rawRecord: res,
+            });
+          }
         }
       }
     } catch (rErr) {
-      console.error('[initializeDatabase results seed]:', rErr);
+      console.error('[initializeDatabase results seed top-level]:', rErr);
     }
 
     // 12. Settings
@@ -1041,8 +1591,13 @@ export async function initializeDatabase(seedData?: any) {
           data: JSON.stringify(settingsToInsert),
         }).onConflictDoNothing();
       }
-    } catch (setErr) {
-      console.error('[initializeDatabase settings seed]:', setErr);
+    } catch (setErr: any) {
+      console.error('[initializeDatabase settings seed error]:', {
+        errorMessage: setErr?.message,
+        errorCode: setErr?.code,
+        errorDetail: setErr?.detail,
+        tableName: 'settings',
+      });
     }
 
     // 13. ATKT Records
@@ -1051,34 +1606,32 @@ export async function initializeDatabase(seedData?: any) {
       if (existingAtkt.length === 0) {
         const atktToInsert = (Array.isArray(seedData?.atktRecords) && seedData.atktRecords.length > 0) ? seedData.atktRecords : INITIAL_ATKT_RECORDS;
         for (const a of atktToInsert) {
-          await db.insert(schema.atktRecords).values({
-            id: a.id,
-            studentId: a.studentId,
-            studentName: a.studentName,
-            rollNumber: a.rollNumber || null,
-            prnNumber: a.prnNumber || null,
-            course: a.course || null,
-            departmentId: a.departmentId || null,
-            departmentName: a.departmentName || null,
-            semester: Number(a.semester) || 1,
-            subjectCode: a.subjectCode || null,
-            subjectName: a.subjectName,
-            backlogType: a.backlogType || null,
-            originalInternalMarks: a.originalInternalMarks ? Number(a.originalInternalMarks) : null,
-            originalExternalMarks: a.originalExternalMarks ? Number(a.originalExternalMarks) : null,
-            attemptsCount: Number(a.attemptsCount) || 1,
-            status: a.status,
-            examFeePaid: a.examFeePaid || false,
-            examFeeAmount: Number(a.examFeeAmount) || 0,
-            reExamDate: a.reExamDate || null,
-            reExamMarksObtained: a.reExamMarksObtained ? Number(a.reExamMarksObtained) : null,
-            clearedAt: a.clearedAt || null,
-            remarks: a.remarks || null,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateAtktRecord(a);
+            await db.insert(schema.atktRecords).values(validated).onConflictDoNothing();
+          } catch (atktErr: any) {
+            console.error(`[initializeDatabase atktRecords seed error] Failed for ATKT record ID "${a?.id}" (${a?.studentName} - ${a?.subjectName}):`, {
+              errorMessage: atktErr?.message,
+              errorCode: atktErr?.code,
+              errorDetail: atktErr?.detail,
+              failedRecordId: a?.id,
+              tableName: 'atkt_records',
+              parameters: {
+                id: a?.id,
+                semester: a?.semester,
+                originalInternalMarks: a?.originalInternalMarks,
+                originalExternalMarks: a?.originalExternalMarks,
+                attemptsCount: a?.attemptsCount,
+                examFeeAmount: a?.examFeeAmount,
+                reExamMarksObtained: a?.reExamMarksObtained,
+              },
+              rawRecord: a,
+            });
+          }
         }
       }
     } catch (atktErr) {
-      console.error('[initializeDatabase atktRecords seed]:', atktErr);
+      console.error('[initializeDatabase atktRecords seed top-level]:', atktErr);
     }
 
     // 14. Academic Calendar Events
@@ -1087,24 +1640,29 @@ export async function initializeDatabase(seedData?: any) {
       if (existingEvents.length === 0) {
         const eventsToInsert = (Array.isArray(seedData?.academicEvents) && seedData.academicEvents.length > 0) ? seedData.academicEvents : INITIAL_ACADEMIC_EVENTS;
         for (const evt of eventsToInsert) {
-          await db.insert(schema.academicEvents).values({
-            id: evt.id,
-            title: evt.title,
-            eventType: evt.eventType,
-            category: evt.category,
-            startDate: evt.startDate,
-            endDate: evt.endDate,
-            isNonWorkingDay: evt.isNonWorkingDay !== undefined ? evt.isNonWorkingDay : true,
-            description: evt.description || null,
-            departmentId: evt.departmentId || null,
-            departmentName: evt.departmentName || null,
-            createdBy: evt.createdBy || 'Admin',
-            createdAt: evt.createdAt || new Date().toISOString().substring(0, 10),
-          }).onConflictDoNothing();
+          try {
+            const validated = validateAcademicEventRecord(evt);
+            await db.insert(schema.academicEvents).values(validated).onConflictDoNothing();
+          } catch (evtErr: any) {
+            console.error(`[initializeDatabase academicEvents seed error] Failed for event ID "${evt?.id}" (${evt?.title}):`, {
+              errorMessage: evtErr?.message,
+              errorCode: evtErr?.code,
+              errorDetail: evtErr?.detail,
+              failedRecordId: evt?.id,
+              tableName: 'academic_events',
+              parameters: {
+                id: evt?.id,
+                startDate: evt?.startDate,
+                endDate: evt?.endDate,
+                isNonWorkingDay: evt?.isNonWorkingDay,
+              },
+              rawRecord: evt,
+            });
+          }
         }
       }
     } catch (evtErr) {
-      console.error('[initializeDatabase academicEvents seed]:', evtErr);
+      console.error('[initializeDatabase academicEvents seed top-level]:', evtErr);
     }
 
     // 15. Audit Logs
@@ -1113,20 +1671,24 @@ export async function initializeDatabase(seedData?: any) {
       if (existingLogs.length === 0) {
         const logsToInsert = (Array.isArray(seedData?.auditLogs) && seedData.auditLogs.length > 0) ? seedData.auditLogs : INITIAL_AUDIT_LOGS;
         for (const log of logsToInsert) {
-          await db.insert(schema.auditLogs).values({
-            id: log.id,
-            timestamp: log.timestamp,
-            actorName: log.actorName || null,
-            actorRole: log.actorRole || null,
-            action: log.action,
-            category: log.category,
-            details: log.details,
-            ipAddress: log.ipAddress || null,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateAuditLogRecord(log);
+            await db.insert(schema.auditLogs).values(validated).onConflictDoNothing();
+          } catch (logErr: any) {
+            console.error(`[initializeDatabase auditLogs seed error] Failed for audit log ID "${log?.id}":`, {
+              errorMessage: logErr?.message,
+              errorCode: logErr?.code,
+              errorDetail: logErr?.detail,
+              failedRecordId: log?.id,
+              tableName: 'audit_logs',
+              parameters: { id: log?.id, timestamp: log?.timestamp, action: log?.action },
+              rawRecord: log,
+            });
+          }
         }
       }
     } catch (logErr) {
-      console.error('[initializeDatabase auditLogs seed]:', logErr);
+      console.error('[initializeDatabase auditLogs seed top-level]:', logErr);
     }
 
     // 16. Chat Conversations & Messages
@@ -1135,21 +1697,24 @@ export async function initializeDatabase(seedData?: any) {
       if (existingChatConvs.length === 0) {
         const convsToInsert = (Array.isArray(seedData?.chatConversations) && seedData.chatConversations.length > 0) ? seedData.chatConversations : INITIAL_CHAT_CONVERSATIONS;
         for (const conv of convsToInsert) {
-          await db.insert(schema.chatConversations).values({
-            id: conv.id,
-            participantId: conv.participantId,
-            participantName: conv.participantName,
-            participantRole: conv.participantRole,
-            participantAvatar: conv.participantAvatar || null,
-            participantStatus: conv.participantStatus || 'Offline',
-            lastMessage: conv.lastMessage || null,
-            lastMessageTime: conv.lastMessageTime || null,
-            unreadCount: Number(conv.unreadCount) || 0,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateChatConversationRecord(conv);
+            await db.insert(schema.chatConversations).values(validated).onConflictDoNothing();
+          } catch (convErr: any) {
+            console.error(`[initializeDatabase chatConversations seed error] Failed for conversation ID "${conv?.id}":`, {
+              errorMessage: convErr?.message,
+              errorCode: convErr?.code,
+              errorDetail: convErr?.detail,
+              failedRecordId: conv?.id,
+              tableName: 'chat_conversations',
+              parameters: { id: conv?.id, unreadCount: conv?.unreadCount },
+              rawRecord: conv,
+            });
+          }
         }
       }
     } catch (convErr) {
-      console.error('[initializeDatabase chatConversations seed]:', convErr);
+      console.error('[initializeDatabase chatConversations seed top-level]:', convErr);
     }
 
     try {
@@ -1157,23 +1722,24 @@ export async function initializeDatabase(seedData?: any) {
       if (existingChatMsgs.length === 0) {
         const msgsToInsert = (Array.isArray(seedData?.chatMessages) && seedData.chatMessages.length > 0) ? seedData.chatMessages : INITIAL_CHAT_MESSAGES;
         for (const msg of msgsToInsert) {
-          await db.insert(schema.chatMessages).values({
-            id: msg.id,
-            conversationId: msg.conversationId,
-            senderId: msg.senderId,
-            senderName: msg.senderName,
-            senderRole: msg.senderRole,
-            senderAvatar: msg.senderAvatar || null,
-            text: msg.text,
-            attachmentUrl: msg.attachmentUrl || null,
-            attachmentType: msg.attachmentType || null,
-            createdAt: msg.createdAt,
-            isRead: msg.isRead || false,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateChatMessageRecord(msg);
+            await db.insert(schema.chatMessages).values(validated).onConflictDoNothing();
+          } catch (msgErr: any) {
+            console.error(`[initializeDatabase chatMessages seed error] Failed for message ID "${msg?.id}":`, {
+              errorMessage: msgErr?.message,
+              errorCode: msgErr?.code,
+              errorDetail: msgErr?.detail,
+              failedRecordId: msg?.id,
+              tableName: 'chat_messages',
+              parameters: { id: msg?.id, conversationId: msg?.conversationId, isRead: msg?.isRead },
+              rawRecord: msg,
+            });
+          }
         }
       }
     } catch (msgErr) {
-      console.error('[initializeDatabase chatMessages seed]:', msgErr);
+      console.error('[initializeDatabase chatMessages seed top-level]:', msgErr);
     }
 
     // 17. Import Logs
@@ -1182,21 +1748,30 @@ export async function initializeDatabase(seedData?: any) {
       if (existingImportLogs.length === 0) {
         const importsToInsert = (Array.isArray(seedData?.importLogs) && seedData.importLogs.length > 0) ? seedData.importLogs : INITIAL_IMPORT_LOGS;
         for (const imp of importsToInsert) {
-          await db.insert(schema.importLogs).values({
-            id: imp.id,
-            fileName: imp.fileName,
-            uploadedAt: imp.uploadedAt,
-            uploadedBy: imp.uploadedBy,
-            totalRecords: Number(imp.totalRecords) || 0,
-            importedCount: Number(imp.importedCount) || 0,
-            updatedCount: Number(imp.updatedCount) || 0,
-            skippedCount: Number(imp.skippedCount) || 0,
-            status: imp.status,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateImportLogRecord(imp);
+            await db.insert(schema.importLogs).values(validated).onConflictDoNothing();
+          } catch (impErr: any) {
+            console.error(`[initializeDatabase importLogs seed error] Failed for import log ID "${imp?.id}":`, {
+              errorMessage: impErr?.message,
+              errorCode: impErr?.code,
+              errorDetail: impErr?.detail,
+              failedRecordId: imp?.id,
+              tableName: 'import_logs',
+              parameters: {
+                id: imp?.id,
+                totalRecords: imp?.totalRecords,
+                importedCount: imp?.importedCount,
+                updatedCount: imp?.updatedCount,
+                skippedCount: imp?.skippedCount,
+              },
+              rawRecord: imp,
+            });
+          }
         }
       }
     } catch (impErr) {
-      console.error('[initializeDatabase importLogs seed]:', impErr);
+      console.error('[initializeDatabase importLogs seed top-level]:', impErr);
     }
 
     // 18. Promotion History
@@ -1205,23 +1780,29 @@ export async function initializeDatabase(seedData?: any) {
       if (existingPromos.length === 0) {
         const promosToInsert = (Array.isArray(seedData?.promotionHistory) && seedData.promotionHistory.length > 0) ? seedData.promotionHistory : INITIAL_PROMOTION_HISTORY;
         for (const promo of promosToInsert) {
-          await db.insert(schema.promotionHistory).values({
-            id: promo.id,
-            batchName: promo.batchName,
-            promotedAt: promo.promotedAt,
-            promotedBy: promo.promotedBy,
-            program: promo.program,
-            course: promo.course,
-            fromSemester: Number(promo.fromSemester) || 1,
-            toSemester: Number(promo.toSemester) || 2,
-            totalStudentsPromoted: Number(promo.totalStudentsPromoted) || 0,
-            status: promo.status,
-            records: promo.records ? JSON.stringify(promo.records) : null,
-          }).onConflictDoNothing();
+          try {
+            const validated = validatePromotionHistoryRecord(promo);
+            await db.insert(schema.promotionHistory).values(validated).onConflictDoNothing();
+          } catch (promoErr: any) {
+            console.error(`[initializeDatabase promotionHistory seed error] Failed for promotion ID "${promo?.id}":`, {
+              errorMessage: promoErr?.message,
+              errorCode: promoErr?.code,
+              errorDetail: promoErr?.detail,
+              failedRecordId: promo?.id,
+              tableName: 'promotion_history',
+              parameters: {
+                id: promo?.id,
+                fromSemester: promo?.fromSemester,
+                toSemester: promo?.toSemester,
+                totalStudentsPromoted: promo?.totalStudentsPromoted,
+              },
+              rawRecord: promo,
+            });
+          }
         }
       }
     } catch (promoErr) {
-      console.error('[initializeDatabase promotionHistory seed]:', promoErr);
+      console.error('[initializeDatabase promotionHistory seed top-level]:', promoErr);
     }
 
     // 19. Class Teacher Assignments
@@ -1230,34 +1811,100 @@ export async function initializeDatabase(seedData?: any) {
       if (existingClassTeachers.length === 0) {
         const ctToInsert = (Array.isArray(seedData?.classTeachers) && seedData.classTeachers.length > 0) ? seedData.classTeachers : INITIAL_CLASS_TEACHERS;
         for (const ct of ctToInsert) {
-          await db.insert(schema.classTeacherAssignments).values({
-            id: ct.id,
-            departmentId: ct.departmentId,
-            departmentName: ct.departmentName,
-            courseId: ct.courseId,
-            courseCode: ct.courseCode,
-            courseName: ct.courseName,
-            academicYear: ct.academicYear,
-            semester: Number(ct.semester) || 1,
-            division: ct.division,
-            classTeacherId: ct.classTeacherId,
-            classTeacherName: ct.classTeacherName,
-            assistantTeacherId: ct.assistantTeacherId || null,
-            assistantTeacherName: ct.assistantTeacherName || null,
-            classroom: ct.classroom,
-            academicSession: ct.academicSession,
-            assignedAt: ct.assignedAt,
-            assignedBy: ct.assignedBy,
-          }).onConflictDoNothing();
+          try {
+            const validated = validateClassTeacherRecord(ct);
+            await db.insert(schema.classTeacherAssignments).values(validated).onConflictDoNothing();
+          } catch (ctErr: any) {
+            console.error(`[initializeDatabase classTeacherAssignments seed error] Failed for assignment ID "${ct?.id}":`, {
+              errorMessage: ctErr?.message,
+              errorCode: ctErr?.code,
+              errorDetail: ctErr?.detail,
+              failedRecordId: ct?.id,
+              tableName: 'class_teacher_assignments',
+              parameters: {
+                id: ct?.id,
+                semester: ct?.semester,
+                classTeacherId: ct?.classTeacherId,
+              },
+              rawRecord: ct,
+            });
+          }
         }
       }
     } catch (ctErr) {
-      console.error('[initializeDatabase classTeacherAssignments seed]:', ctErr);
+      console.error('[initializeDatabase classTeacherAssignments seed top-level]:', ctErr);
+    }
+
+    // 20. Notices
+    try {
+      const existingNotices = await db.select().from(schema.notices);
+      if (existingNotices.length === 0) {
+        const noticesToInsert = (Array.isArray(seedData?.notices) && seedData.notices.length > 0) ? seedData.notices : INITIAL_NOTICES;
+        for (const n of noticesToInsert) {
+          try {
+            const validated = validateNoticeRecord(n);
+            await db.insert(schema.notices).values(validated).onConflictDoNothing();
+          } catch (nErr: any) {
+            console.error(`[initializeDatabase notices seed error] Failed for notice ID "${n?.id}":`, {
+              errorMessage: nErr?.message,
+              errorCode: nErr?.code,
+              errorDetail: nErr?.detail,
+              failedRecordId: n?.id,
+              tableName: 'notices',
+              parameters: {
+                id: n?.id,
+                targetSemester: n?.targetSemester,
+                isPinned: n?.isPinned,
+                isArchived: n?.isArchived,
+              },
+              rawRecord: n,
+            });
+          }
+        }
+      }
+    } catch (nErr) {
+      console.error('[initializeDatabase notices seed top-level]:', nErr);
+    }
+
+    // 21. Department Activities
+    try {
+      const existingActs = await db.select().from(schema.departmentActivities);
+      if (existingActs.length === 0) {
+        const actsToInsert = (Array.isArray(seedData?.departmentActivities) && seedData.departmentActivities.length > 0) ? seedData.departmentActivities : INITIAL_DEPARTMENT_ACTIVITIES;
+        for (const da of actsToInsert) {
+          try {
+            const validated = validateDepartmentActivityRecord(da);
+            await db.insert(schema.departmentActivities).values(validated).onConflictDoNothing();
+          } catch (daErr: any) {
+            console.error(`[initializeDatabase departmentActivities seed error] Failed for activity ID "${da?.id}":`, {
+              errorMessage: daErr?.message,
+              errorCode: daErr?.code,
+              errorDetail: daErr?.detail,
+              failedRecordId: da?.id,
+              tableName: 'department_activities',
+              parameters: {
+                id: da?.id,
+                participantsCount: da?.participantsCount,
+              },
+              rawRecord: da,
+            });
+          }
+        }
+      }
+    } catch (daErr) {
+      console.error('[initializeDatabase departmentActivities seed top-level]:', daErr);
     }
 
     console.log('[Cloud SQL] SQL Database tables initialized and ready.');
-  } catch (err) {
-    console.error('[Cloud SQL] Database initialization notice:', err);
+  } catch (err: any) {
+    console.error('[Cloud SQL] Database initialization error details:', {
+      errorMessage: err?.message,
+      errorCode: err?.code,
+      errorDetail: err?.detail,
+      errorHint: err?.hint,
+      errorPosition: err?.position,
+      fullError: err,
+    });
   }
 }
 
@@ -1340,7 +1987,7 @@ export async function getAllUsers(): Promise<User[]> {
     }));
   } catch (err) {
     console.error('SQL getAllUsers error:', err);
-    return INITIAL_USERS;
+    return [];
   }
 }
 
@@ -1483,7 +2130,7 @@ export async function getAllStudents(): Promise<Student360Profile[]> {
   try {
     const rows = await db.select().from(schema.students);
     if (!rows || rows.length === 0) {
-      return INITIAL_STUDENTS;
+      return [];
     }
     const mapped = rows
       .map((row) => {
@@ -1495,15 +2142,67 @@ export async function getAllStudents(): Promise<Student360Profile[]> {
         }
       })
       .filter(Boolean) as Student360Profile[];
-    return mapped.length > 0 ? mapped : INITIAL_STUDENTS;
+    return mapped;
   } catch (err) {
     console.error('SQL getAllStudents error:', err);
-    return INITIAL_STUDENTS;
+    return [];
+  }
+}
+
+export async function getStudentById(id: string): Promise<Student360Profile | null> {
+  if (!id) return null;
+  const trimmedId = id.trim();
+  try {
+    // 1. Direct indexed match
+    const rows = await db.select().from(schema.students).where(
+      or(
+        eq(schema.students.id, trimmedId),
+        eq(schema.students.studentId, trimmedId),
+        eq(schema.students.rollNumber, trimmedId),
+        eq(schema.students.prnNumber, trimmedId),
+        eq(schema.students.email, trimmedId)
+      )
+    );
+    if (rows && rows.length > 0) {
+      return mapSqlToStudent(rows[0]);
+    }
+
+    // 2. Case-insensitive query fallback
+    const allRows = await db.select().from(schema.students);
+    const normalized = trimmedId.toLowerCase();
+    const foundRow = allRows.find(
+      (r) =>
+        (r.id && r.id.toLowerCase() === normalized) ||
+        (r.studentId && r.studentId.toLowerCase() === normalized) ||
+        (r.rollNumber && r.rollNumber.toLowerCase() === normalized) ||
+        (r.prnNumber && r.prnNumber.toLowerCase() === normalized) ||
+        (r.email && r.email.toLowerCase() === normalized)
+    );
+    if (foundRow) {
+      return mapSqlToStudent(foundRow);
+    }
+    return null;
+  } catch (err) {
+    console.error(`getStudentById error for ${id}:`, err);
+    return null;
   }
 }
 
 export async function insertStudent(st: Student360Profile): Promise<Student360Profile> {
   return await upsertStudent(st);
+}
+
+export async function batchInsertStudents(studentsList: Student360Profile[]): Promise<Student360Profile[]> {
+  const results: Student360Profile[] = [];
+  for (const st of studentsList) {
+    try {
+      const saved = await upsertStudent(st);
+      results.push(saved);
+    } catch (err) {
+      console.error(`Error in batchInsertStudents for student ${st?.studentId || st?.id}:`, err);
+    }
+  }
+  return results;
 }
 
 export async function upsertStudent(st: Student360Profile): Promise<Student360Profile> {
@@ -1687,7 +2386,7 @@ export async function getAllFaculty(): Promise<Faculty[]> {
     });
   } catch (err) {
     console.error('SQL getAllFaculty error:', err);
-    return INITIAL_FACULTY;
+    return [];
   }
 }
 
@@ -1791,7 +2490,7 @@ export async function getAllPrograms(): Promise<Program[]> {
     }));
   } catch (err) {
     console.error('SQL getAllPrograms error:', err);
-    return INITIAL_PROGRAMS;
+    return [];
   }
 }
 
@@ -1839,27 +2538,28 @@ export async function getAllDepartments(): Promise<Department[]> {
     }));
   } catch (err) {
     console.error('SQL getAllDepartments error:', err);
-    return INITIAL_DEPARTMENTS;
+    return [];
   }
 }
 
 export async function insertDepartment(d: Department): Promise<Department> {
-  await db.insert(schema.departments).values({
-    id: d.id,
-    code: d.code,
-    name: d.name,
-    hodId: d.hodId || null,
-    hodName: d.hodName || null,
-    establishedYear: d.establishedYear || 2010,
-    totalStudents: d.totalStudents || 0,
-    totalFaculty: d.totalFaculty || 0,
-    avgAttendancePct: d.avgAttendancePct || 0,
-  });
+  const validated = validateDepartmentRecord(d);
+  await db.insert(schema.departments).values(validated);
   return d;
 }
 
 export async function updateDepartment(id: string, updates: Partial<Department>): Promise<Department | null> {
-  await db.update(schema.departments).set(updates as any).where(eq(schema.departments.id, id));
+  const payload: any = {};
+  if (updates.code !== undefined) payload.code = updates.code;
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.hodId !== undefined) payload.hodId = updates.hodId || null;
+  if (updates.hodName !== undefined) payload.hodName = updates.hodName || null;
+  if (updates.establishedYear !== undefined) payload.establishedYear = parseInteger(updates.establishedYear, 2010, 'established_year');
+  if (updates.totalStudents !== undefined) payload.totalStudents = parseInteger(updates.totalStudents, 0, 'total_students');
+  if (updates.totalFaculty !== undefined) payload.totalFaculty = parseInteger(updates.totalFaculty, 0, 'total_faculty');
+  if (updates.avgAttendancePct !== undefined) payload.avgAttendancePct = parseFloatNum(updates.avgAttendancePct, 0, 'avg_attendance_pct');
+
+  await db.update(schema.departments).set(payload).where(eq(schema.departments.id, id));
   const rows = await db.select().from(schema.departments).where(eq(schema.departments.id, id));
   if (rows.length === 0) return null;
   const r = rows[0];
@@ -1869,10 +2569,10 @@ export async function updateDepartment(id: string, updates: Partial<Department>)
     name: r.name,
     hodId: r.hodId || '',
     hodName: r.hodName || '',
-    establishedYear: Number(r.establishedYear) || 2010,
-    totalStudents: Number(r.totalStudents) || 0,
-    totalFaculty: Number(r.totalFaculty) || 0,
-    avgAttendancePct: Number(r.avgAttendancePct) || 0,
+    establishedYear: parseInteger(r.establishedYear, 2010, 'established_year'),
+    totalStudents: parseInteger(r.totalStudents, 0, 'total_students'),
+    totalFaculty: parseInteger(r.totalFaculty, 0, 'total_faculty'),
+    avgAttendancePct: parseFloatNum(r.avgAttendancePct, 0, 'avg_attendance_pct'),
   };
 }
 
@@ -1901,34 +2601,25 @@ export async function getAllCourses(): Promise<Course[]> {
     }));
   } catch (err) {
     console.error('SQL getAllCourses error:', err);
-    return INITIAL_COURSES;
+    return [];
   }
 }
 
 export async function insertCourse(c: Course): Promise<Course> {
-  await db.insert(schema.courses).values({
-    id: c.id,
-    programId: c.programId,
-    programName: c.programName || null,
-    courseName: c.courseName,
-    courseCode: c.courseCode,
-    durationYears: c.durationYears || 3,
-    totalSemesters: c.totalSemesters || 6,
-    status: c.status || 'Active',
-    departmentId: c.departmentId || null,
-    code: c.code || c.courseCode,
-    name: c.name || c.courseName,
-    createdAt: c.createdAt || new Date().toISOString(),
-    updatedAt: c.updatedAt || new Date().toISOString(),
-  });
+  const validated = validateCourseRecord(c);
+  await db.insert(schema.courses).values(validated);
   return c;
 }
 
 export async function updateCourse(id: string, updates: Partial<Course>): Promise<Course | null> {
-  await db.update(schema.courses).set({
+  const payload: any = {
     ...updates,
     updatedAt: new Date().toISOString(),
-  } as any).where(eq(schema.courses.id, id));
+  };
+  if (updates.durationYears !== undefined) payload.durationYears = parseInteger(updates.durationYears, 3, 'duration_years');
+  if (updates.totalSemesters !== undefined) payload.totalSemesters = parseInteger(updates.totalSemesters, 6, 'total_semesters');
+
+  await db.update(schema.courses).set(payload).where(eq(schema.courses.id, id));
   const rows = await db.select().from(schema.courses).where(eq(schema.courses.id, id));
   if (rows.length === 0) return null;
   const r = rows[0];
@@ -1938,8 +2629,8 @@ export async function updateCourse(id: string, updates: Partial<Course>): Promis
     programName: r.programName || undefined,
     courseName: r.courseName,
     courseCode: r.courseCode,
-    durationYears: Number(r.durationYears) || 3,
-    totalSemesters: Number(r.totalSemesters) || 6,
+    durationYears: parseInteger(r.durationYears, 3, 'duration_years'),
+    totalSemesters: parseInteger(r.totalSemesters, 6, 'total_semesters'),
     status: r.status as any,
     departmentId: r.departmentId || undefined,
     code: r.code || r.courseCode,
@@ -1966,41 +2657,31 @@ export async function getAllSubjects(): Promise<Subject[]> {
       programName: r.programName || undefined,
       courseId: r.courseId || undefined,
       courseCode: r.courseCode || undefined,
-      semester: Number(r.semester),
+      semester: parseInteger(r.semester, 1, 'semester'),
       type: r.type as any,
-      credits: Number(r.credits),
+      credits: parseInteger(r.credits, 0, 'credits'),
       assignedFacultyId: r.assignedFacultyId || '',
       assignedFacultyName: r.assignedFacultyName || '',
       status: (r.status as any) || 'Active',
     }));
   } catch (err) {
     console.error('SQL getAllSubjects error:', err);
-    return INITIAL_SUBJECTS;
+    return [];
   }
 }
 
 export async function insertSubject(s: Subject): Promise<Subject> {
-  await db.insert(schema.subjects).values({
-    id: s.id,
-    code: s.code,
-    name: s.name,
-    departmentId: s.departmentId,
-    programId: s.programId || null,
-    programName: s.programName || null,
-    courseId: s.courseId || null,
-    courseCode: s.courseCode || null,
-    semester: s.semester,
-    type: s.type,
-    credits: s.credits,
-    assignedFacultyId: s.assignedFacultyId || null,
-    assignedFacultyName: s.assignedFacultyName || null,
-    status: s.status || 'Active',
-  });
+  const validated = validateSubjectRecord(s);
+  await db.insert(schema.subjects).values(validated);
   return s;
 }
 
 export async function updateSubject(id: string, updates: Partial<Subject>): Promise<Subject | null> {
-  await db.update(schema.subjects).set(updates as any).where(eq(schema.subjects.id, id));
+  const payload: any = { ...updates };
+  if (updates.semester !== undefined) payload.semester = parseInteger(updates.semester, 1, 'semester');
+  if (updates.credits !== undefined) payload.credits = parseInteger(updates.credits, 0, 'credits');
+
+  await db.update(schema.subjects).set(payload).where(eq(schema.subjects.id, id));
   const rows = await db.select().from(schema.subjects).where(eq(schema.subjects.id, id));
   if (rows.length === 0) return null;
   const r = rows[0];
@@ -2013,9 +2694,9 @@ export async function updateSubject(id: string, updates: Partial<Subject>): Prom
     programName: r.programName || undefined,
     courseId: r.courseId || undefined,
     courseCode: r.courseCode || undefined,
-    semester: Number(r.semester),
+    semester: parseInteger(r.semester, 1, 'semester'),
     type: r.type as any,
-    credits: Number(r.credits),
+    credits: parseInteger(r.credits, 0, 'credits'),
     assignedFacultyId: r.assignedFacultyId || '',
     assignedFacultyName: r.assignedFacultyName || '',
     status: (r.status as any) || 'Active',
@@ -2053,7 +2734,7 @@ export async function getAllTimetable(): Promise<TimetableSlot[]> {
     }));
   } catch (err) {
     console.error('SQL getAllTimetable error:', err);
-    return INITIAL_TIMETABLE;
+    return [];
   }
 }
 
@@ -2141,7 +2822,7 @@ export async function getAllSessions(): Promise<AttendanceSession[]> {
     }));
   } catch (err) {
     console.error('SQL getAllSessions error:', err);
-    return INITIAL_SESSIONS;
+    return [];
   }
 }
 
@@ -2163,7 +2844,7 @@ export async function getAllAttendanceRecords(sessionId?: string): Promise<Atten
     }));
   } catch (err) {
     console.error('SQL getAllAttendanceRecords error:', err);
-    return INITIAL_ATTENDANCE_RECORDS;
+    return [];
   }
 }
 
@@ -2265,7 +2946,7 @@ export async function getAllLeaves(): Promise<LeaveRequest[]> {
     }));
   } catch (err) {
     console.error('SQL getAllLeaves error:', err);
-    return INITIAL_LEAVES;
+    return [];
   }
 }
 
@@ -2346,7 +3027,7 @@ export async function getAllResults(studentId?: string): Promise<StudentResult[]
     }));
   } catch (err) {
     console.error('SQL getAllResults error:', err);
-    return INITIAL_RESULTS;
+    return [];
   }
 }
 
@@ -2420,7 +3101,7 @@ export async function getAllCorrections(): Promise<AttendanceCorrectionRequest[]
     }));
   } catch (err) {
     console.error('SQL getAllCorrections error:', err);
-    return INITIAL_CORRECTIONS;
+    return [];
   }
 }
 
@@ -2500,7 +3181,7 @@ export async function getAllNotices(): Promise<NoticeItem[]> {
     }));
   } catch (err) {
     console.error('SQL getAllNotices error:', err);
-    return INITIAL_NOTICES;
+    return [];
   }
 }
 
@@ -2593,7 +3274,7 @@ export async function getAllDepartmentActivities(): Promise<DepartmentActivity[]
     }));
   } catch (err) {
     console.error('SQL getAllDepartmentActivities error:', err);
-    return INITIAL_DEPARTMENT_ACTIVITIES;
+    return [];
   }
 }
 
@@ -2722,7 +3403,7 @@ export async function getAllATKT(): Promise<ATKTRecord[]> {
     }));
   } catch (err) {
     console.error('SQL getAllATKT error:', err);
-    return INITIAL_ATKT_RECORDS;
+    return [];
   }
 }
 
@@ -2812,7 +3493,7 @@ export async function getAllAcademicEvents(): Promise<AcademicCalendarEvent[]> {
     }));
   } catch (err) {
     console.error('SQL getAllAcademicEvents error:', err);
-    return INITIAL_ACADEMIC_EVENTS;
+    return [];
   }
 }
 
@@ -2879,7 +3560,7 @@ export async function getAllNotifications(): Promise<ERPNotification[]> {
     }));
   } catch (err) {
     console.error('SQL getAllNotifications error:', err);
-    return INITIAL_NOTIFICATIONS;
+    return [];
   }
 }
 
@@ -2923,7 +3604,7 @@ export async function getAllAuditLogs(): Promise<AuditLog[]> {
     }));
   } catch (err) {
     console.error('SQL getAllAuditLogs error:', err);
-    return INITIAL_AUDIT_LOGS;
+    return [];
   }
 }
 
@@ -2964,7 +3645,7 @@ export async function getAllChatConversations(): Promise<ChatConversation[]> {
     }));
   } catch (err) {
     console.error('SQL getAllChatConversations error:', err);
-    return INITIAL_CHAT_CONVERSATIONS;
+    return [];
   }
 }
 
@@ -3032,7 +3713,7 @@ export async function getAllChatMessages(): Promise<Record<string, ChatMessage[]
     return result;
   } catch (err) {
     console.error('SQL getAllChatMessages error:', err);
-    return INITIAL_CHAT_MESSAGES;
+    return {};
   }
 }
 
@@ -3087,7 +3768,7 @@ export async function getAllImportLogs(): Promise<ImportHistoryLog[]> {
     }));
   } catch (err) {
     console.error('SQL getAllImportLogs error:', err);
-    return INITIAL_IMPORT_LOGS;
+    return [];
   }
 }
 
@@ -3127,7 +3808,7 @@ export async function getAllPromotionHistory(): Promise<PromotionBatch[]> {
     }));
   } catch (err) {
     console.error('SQL getAllPromotionHistory error:', err);
-    return INITIAL_PROMOTION_HISTORY;
+    return [];
   }
 }
 
@@ -3175,7 +3856,7 @@ export async function getAllClassTeacherAssignments(): Promise<ClassTeacherAssig
     }));
   } catch (err) {
     console.error('SQL getAllClassTeacherAssignments error:', err);
-    return INITIAL_CLASS_TEACHERS;
+    return [];
   }
 }
 

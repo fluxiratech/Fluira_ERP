@@ -43,6 +43,8 @@ import {
   updateUser,
   deleteUser,
   getAllStudents,
+  getStudentById,
+  batchInsertStudents,
   insertStudent,
   upsertStudent,
   updateStudent,
@@ -338,8 +340,7 @@ async function startServer() {
 
   app.get('/api/students/:id/360', async (req, res) => {
     try {
-      const students = await getAllStudents();
-      const student = students.find((s) => s.id === req.params.id || s.studentId === req.params.id || s.rollNumber === req.params.id);
+      const student = await getStudentById(req.params.id);
       if (!student) return res.status(404).json({ error: 'Student 360 profile not found' });
       res.json(student);
     } catch (err: any) {

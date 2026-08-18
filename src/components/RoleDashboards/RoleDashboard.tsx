@@ -103,7 +103,12 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
   const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
 
   // Identify student for Student or Parent view
-  const myStudent = students.find((s) => s.id === currentUser.linkedStudentId || s.email === currentUser.email) || students[0];
+  const myStudent = students.find(
+    (s) =>
+      (currentUser.linkedStudentId && (s.id === currentUser.linkedStudentId || s.studentId === currentUser.linkedStudentId)) ||
+      (s.email && currentUser.email && s.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+      (currentUser.id && (s.studentId === currentUser.id || s.id === currentUser.id || currentUser.id === `u-${s.id}` || currentUser.id === `usr-${s.id}`))
+  );
 
   return (
     <div className="space-y-6">
@@ -386,6 +391,19 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 1.1 STUDENT VIEW (UNLINKED PROFILE) */}
+      {currentUser.role === 'Student' && !myStudent && (
+        <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto">
+            <Users className="w-8 h-8" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-800">No Student Profile Linked</h2>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Your user login ({currentUser.email}) is active, but is not currently linked to an enrolled student record in the PostgreSQL database. Please contact your Department Administrator or HOD to link your Roll Number.
+          </p>
         </div>
       )}
 
