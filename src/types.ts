@@ -438,8 +438,8 @@ export interface Subject {
   semester: number;
   type: 'Theory' | 'Practical' | 'Lab' | 'Elective';
   credits: number;
-  assignedFacultyId: string;
-  assignedFacultyName: string;
+  assignedFacultyId?: string;
+  assignedFacultyName?: string;
   status?: 'Active' | 'Inactive';
   division?: string;
 }
@@ -456,7 +456,7 @@ export interface TimetableSlot {
   semester: number;
   division: string;
   day: DayOfWeek;
-  timeSlot: string; // e.g. "09:00 AM - 10:00 AM"
+  timeSlot: string; // e.g. "07:50 AM - 08:50 AM"
   subjectId: string;
   subjectCode?: string;
   subjectName: string;
@@ -675,3 +675,5 @@ export interface AcademicCalendarEvent {
   createdBy?: string;
   createdAt?: string;
 }
+
+

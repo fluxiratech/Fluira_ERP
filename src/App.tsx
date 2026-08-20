@@ -612,7 +612,7 @@ export default function App() {
         semester: Number(newSlot.semester) || 1,
         division: newSlot.division || 'A',
         day: newSlot.day || 'Monday',
-        timeSlot: newSlot.timeSlot || '09:00 AM - 10:00 AM',
+        timeSlot: newSlot.timeSlot || '07:50 AM - 08:50 AM',
         subjectId: newSlot.subjectId || 'sub-1',
         subjectCode: newSlot.subjectCode || 'AF101',
         subjectName: newSlot.subjectName || 'Financial Accounting I',
@@ -1005,7 +1005,7 @@ export default function App() {
     const newSlots: TimetableSlot[] = importedSlots.map((ts, idx) => ({
       id: `slot-imported-${Date.now()}-${idx}`,
       day: ts.day || 'Monday',
-      timeSlot: ts.timeSlot || '09:00 AM - 10:00 AM',
+      timeSlot: ts.timeSlot || '07:50 AM - 08:50 AM',
       subjectId: ts.subjectId || 'sub-1',
       subjectCode: ts.subjectCode || 'AF101',
       subjectName: ts.subjectName || 'Financial Accounting I',

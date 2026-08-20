@@ -19,9 +19,11 @@ import {
   Download,
   Lock,
   Sparkles,
+  Coffee,
 } from 'lucide-react';
 import { exportReportToPDF, exportReportToExcel, exportReportToCSV } from '../utils/reportExporter';
 import { ExportReportModal } from './ExportReportModal';
+import { parseTimeToMinutes } from '../utils/timetableConflictDetector';
 
 interface TimetableGridProps {
   slots: TimetableSlot[];
@@ -111,7 +113,7 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
 
   // New Slot Form State
   const [day, setDay] = useState<DayOfWeek>('Monday');
-  const [timeSlot, setTimeSlot] = useState<string>('09:00 AM - 10:00 AM');
+  const [timeSlot, setTimeSlot] = useState<string>('07:50 AM - 08:50 AM');
   const [slotDivision, setSlotDivision] = useState<string>(selectedDiv || 'A');
   const [subjectId, setSubjectId] = useState<string>(subjects[0]?.id || '');
   const [facultyId, setFacultyId] = useState<string>(facultyList[0]?.id || '');
@@ -120,12 +122,12 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
 
   const days: DayOfWeek[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const defaultTimeSlots = [
-    '09:00 AM - 10:00 AM',
-    '10:00 AM - 11:00 AM',
-    '11:15 AM - 12:15 PM',
-    '01:00 PM - 02:00 PM',
-    '02:00 PM - 03:00 PM',
-    '03:00 PM - 04:00 PM',
+    '07:50 AM - 08:50 AM',
+    '08:50 AM - 09:50 AM',
+    '09:50 AM - 10:10 AM (Recess)',
+    '10:10 AM - 11:10 AM',
+    '11:10 AM - 12:10 PM',
+    '12:10 PM - 01:10 PM',
   ];
 
   // Sync slotDivision whenever main selectedDiv changes
@@ -333,7 +335,11 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
       ...defaultTimeSlots,
       ...filteredSlots.map((s) => s.timeSlot),
     ])
-  );
+  ).sort((a, b) => {
+    const startA = parseTimeToMinutes(a.split('-')[0] || a, false) ?? 0;
+    const startB = parseTimeToMinutes(b.split('-')[0] || b, false) ?? 0;
+    return startA - startB;
+  });
 
   const handleCreateSlot = (e: React.FormEvent) => {
     e.preventDefault();
@@ -644,15 +650,33 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
 
       {/* Timetable Grid Matrix */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full border-collapse min-w-[800px]">
+        <table className="w-full border-collapse min-w-[900px]">
           <thead>
             <tr className="bg-slate-900 text-white text-xs font-bold uppercase tracking-wider">
               <th className="p-3 border-b border-slate-800 w-32 text-center">Day / Time</th>
-              {timeSlots.map((ts) => (
-                <th key={ts} className="p-3 border-b border-slate-800 text-center font-mono">
-                  {ts}
-                </th>
-              ))}
+              {timeSlots.map((ts) => {
+                const isRecess = ts.toLowerCase().includes('recess');
+                return (
+                  <th
+                    key={ts}
+                    className={`p-3 border-b border-slate-800 text-center font-mono ${
+                      isRecess ? 'bg-amber-950/80 text-amber-200 border-x border-amber-900/60' : ''
+                    }`}
+                  >
+                    {isRecess ? (
+                      <div className="flex flex-col items-center justify-center space-y-0.5">
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/40">
+                          <Coffee className="w-3 h-3 text-amber-400" />
+                          <span>RECESS BREAK</span>
+                        </span>
+                        <span className="text-[11px] font-bold text-amber-100">09:50 AM - 10:10 AM</span>
+                      </div>
+                    ) : (
+                      <span>{ts}</span>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 text-xs">
@@ -663,9 +687,15 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                 </td>
                 {timeSlots.map((ts) => {
                   const matchingSlot = filteredSlots.find((s) => s.day === d && s.timeSlot === ts);
+                  const isRecess = ts.toLowerCase().includes('recess');
 
                   return (
-                    <td key={ts} className="p-2 border-r border-slate-200 align-top h-28 w-44">
+                    <td
+                      key={ts}
+                      className={`p-2 border-r border-slate-200 align-top h-28 ${
+                        isRecess ? 'w-36 bg-amber-50/30 border-amber-100' : 'w-44'
+                      }`}
+                    >
                       {matchingSlot ? (
                         <div className="bg-gradient-to-br from-indigo-50 to-slate-50 p-2.5 rounded-xl border border-indigo-200 h-full flex flex-col justify-between relative group hover:shadow-md transition">
                           {userRole !== 'Student' && (
@@ -705,6 +735,27 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
                               <span>{matchingSlot.classroom}</span>
                             </p>
                           </div>
+                        </div>
+                      ) : isRecess ? (
+                        <div
+                          onClick={() => {
+                            if (userRole === 'Student') return;
+                            setDay(d);
+                            setTimeSlot(ts);
+                            if (isFixedTimetable) {
+                              setShowLockNoticeModal(true);
+                            } else {
+                              setShowAddModal(true);
+                            }
+                          }}
+                          className="h-full rounded-xl bg-amber-50/70 border border-amber-200/80 flex flex-col items-center justify-center text-center p-2 group hover:bg-amber-100/60 hover:border-amber-300 cursor-pointer transition shadow-xs"
+                          title="Recess Break (Click to assign special break slot or activity if needed)"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 mb-1 shadow-2xs group-hover:scale-105 transition">
+                            <Coffee className="w-3.5 h-3.5 text-amber-700" />
+                          </div>
+                          <span className="text-[10px] font-black text-amber-950 uppercase tracking-tight">Recess</span>
+                          <span className="text-[9px] font-semibold text-amber-700">20 Mins</span>
                         </div>
                       ) : (
                         <div
@@ -770,13 +821,36 @@ export const TimetableGrid: React.FC<TimetableGridProps> = ({
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Time Slot (e.g. 09:00 AM - 10:00 AM)</label>
+                <label className="font-bold text-slate-700 block mb-1">Select College Time Slot</label>
+                <div className="grid grid-cols-2 gap-1.5 mb-2">
+                  {defaultTimeSlots.map((tsOption) => {
+                    const isSelected = timeSlot === tsOption;
+                    const isRecess = tsOption.toLowerCase().includes('recess');
+                    return (
+                      <button
+                        key={tsOption}
+                        type="button"
+                        onClick={() => setTimeSlot(tsOption)}
+                        className={`px-2.5 py-1.5 rounded-lg font-bold text-[11px] text-left border transition flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
+                            : isRecess
+                            ? 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="truncate">{tsOption}</span>
+                        {isRecess && <Coffee className="w-3 h-3 text-amber-600 shrink-0 ml-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
                 <input
                   type="text"
                   value={timeSlot}
                   onChange={(e) => setTimeSlot(e.target.value)}
-                  placeholder="e.g. 09:00 AM - 10:00 AM"
-                  className="w-full bg-slate-50 border p-2 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500"
+                  placeholder="e.g. 07:50 AM - 08:50 AM"
+                  className="w-full bg-slate-50 border p-2 rounded-lg font-medium focus:ring-2 focus:ring-indigo-500 font-mono text-[11px]"
                   required
                 />
               </div>

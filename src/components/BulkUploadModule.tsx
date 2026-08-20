@@ -390,7 +390,7 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
 
     const row1 = [
       'Monday',
-      '09:00 AM - 10:00 AM',
+      '07:50 AM - 08:50 AM',
       'AF101',
       'Financial Accounting I',
       'Prof. Rajesh K. Varma',
@@ -403,7 +403,7 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
 
     const row2 = [
       'Monday',
-      '10:00 AM - 11:00 AM',
+      '08:50 AM - 09:50 AM',
       'AF102',
       'Cost Accounting I',
       'Dr. Meenakshi Joshi',
@@ -906,7 +906,7 @@ export const BulkUploadModule: React.FC<BulkUploadModuleProps> = ({
       if (cols.length < 3) continue;
 
       const day = getVal(cols, ['day', 'weekday'], 0, 'Monday');
-      const timeSlot = getVal(cols, ['time slot', 'time', 'slot'], 1, '09:00 AM - 10:00 AM');
+      const timeSlot = getVal(cols, ['time slot', 'time', 'slot'], 1, '07:50 AM - 08:50 AM');
       const subjectCode = getVal(cols, ['subject code', 'code'], 2, 'AF101');
       const subjectName = getVal(cols, ['subject name', 'subject'], 3, 'Financial Accounting I');
       const facultyName = getVal(cols, ['faculty name', 'faculty', 'professor'], 4, 'Faculty Instructor');
